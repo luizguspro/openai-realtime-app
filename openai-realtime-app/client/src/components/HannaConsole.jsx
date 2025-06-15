@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, MicOff, Volume2, Loader2, Calendar, MapPin, Clock, Sparkles, MessageCircle, Keyboard, Send } from 'lucide-react';
+import { Mic, MicOff, Volume2, Loader2, MessageCircle, Phone, Mail, MapPin, Clock, ChevronRight, Headphones, Coffee, Users } from 'lucide-react';
 
 const HANNA_INSTRUCTIONS = `Você é a Hanna, assistente virtual super animada e carismática do Impact Hub Pedra Branca em Palhoça/SC. 
 
@@ -18,37 +18,99 @@ REGRAS ESSENCIAIS:
 5. Foque no Impact Hub mas com personalidade
 6. SEMPRE responda por voz, mesmo quando receber texto
 
-EXEMPLOS DE RESPOSTAS CARISMÁTICAS:
-- "Oi! Eu sou a Hanna, sua amiga virtual aqui do Impact Hub! 😄 Qual é o seu nome?"
-- "Luiz! Que nome lindo! Prazer enorme em te conhecer!"
-- "Oba! Você quer conhecer nosso espaço incrível? Vai adorar!"
-- "Nossa, que legal! O Impact Hub é simplesmente demais!"
+CAPTURA DE INFORMAÇÕES:
+- Quando o visitante disser o nome dele, use a função save_visitor_info com field='name' e value='nome_informado'
+- Exemplo: Se disser "Meu nome é João", use save_visitor_info(field='name', value='João')
+- Depois de salvar, confirme alegremente: "João! Que nome lindo! Prazer em conhecer você!"
 
-CAPTURA E ARMAZENAMENTO DE DADOS:
-- Ao receber NOME: Use save_visitor_info. Depois: "Que legal, [nome]! Adorei te conhecer!"
-- Ao receber E-MAIL: Use save_visitor_info. Confirme com alegria: "Deixa eu anotar... [soletra] Certinho?"
-- Ao receber TELEFONE: Use save_visitor_info. "Ótimo! Anotei aqui: [repete números]. Está certo?"
-- Se não entender: "Ops, não peguei bem! Pode repetir pra mim? 😊"
-
-INFORMAÇÕES DO IMPACT HUB (fale com entusiasmo!):
+INFORMAÇÕES DO IMPACT HUB:
 - Local INCRÍVEL na Rua Jair Hamms, 38 - Pedra Branca
 - Telefone: (48) 3374-7862 
 - WhatsApp: (48) 92000-8625 (responde rapidinho!)
 - Horário: Segunda a sexta, 8h às 18h
 
-SOBRE O ESPAÇO (com empolgação!):
+SOBRE O ESPAÇO:
 - Coworking mais TOP de Floripa!
 - Escritórios privativos super modernos
 - Salas de reunião incríveis
 - Comunidade vibrante de empreendedores
-- Ambiente super inovador e inspirador!
+- Ambiente super inovador e inspirador!`;
 
-Se perguntarem sobre outros assuntos, responda com humor: "Haha, adoraria falar sobre isso, mas sou especialista em Impact Hub! Que tal conhecer nosso espaço?"`;
+// Avatar animado minimalista da Hanna
+const HannaAvatar = ({ isListening, isSpeaking }) => {
+  const canvasRef = useRef(null);
+  const animationRef = useRef(null);
+  
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    
+    let phase = 0;
+    
+    const draw = () => {
+      ctx.clearRect(0, 0, width, height);
+      
+      const layers = 3;
+      for (let i = layers; i > 0; i--) {
+        const radius = 40 * (i / layers);
+        const scale = isListening ? 1.15 : (isSpeaking ? 1.1 : 1);
+        const animatedRadius = radius * scale + Math.sin(phase + i) * 2;
+        
+        ctx.fillStyle = `rgba(139, 47, 51, ${0.1 * (layers - i + 1) / layers})`;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, animatedRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      ctx.fillStyle = '#8B2F33';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 15 + Math.sin(phase * 2) * 1, 0, Math.PI * 2);
+      ctx.fill();
+      
+      if (isSpeaking || isListening) {
+        for (let i = 0; i < 2; i++) {
+          const waveRadius = 50 + i * 20 + (phase * 30) % 40;
+          const waveOpacity = Math.max(0, 1 - waveRadius / 100) * 0.3;
+          
+          ctx.strokeStyle = `rgba(139, 47, 51, ${waveOpacity})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, waveRadius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      
+      phase += 0.02;
+      animationRef.current = requestAnimationFrame(draw);
+    };
+    
+    draw();
+    
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [isListening, isSpeaking]);
+  
+  return (
+    <canvas 
+      ref={canvasRef} 
+      className="w-full h-full"
+      width={150}
+      height={150}
+    />
+  );
+};
 
-// Instruções otimizadas para respostas curtas
-
-// Componente de visualização de áudio futurista
-const FuturisticAudioVisualizer = ({ isActive, isListening }) => {
+// Visualizador de áudio minimalista
+const AudioVisualizer = ({ isActive, isListening }) => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
 
@@ -61,48 +123,41 @@ const FuturisticAudioVisualizer = ({ isActive, isListening }) => {
     const height = canvas.height;
     
     let phase = 0;
+    const dots = 40;
 
     const draw = () => {
       ctx.clearRect(0, 0, width, height);
       
-      // Gradient background
-      const gradient = ctx.createLinearGradient(0, 0, width, 0);
-      gradient.addColorStop(0, 'rgba(16, 185, 129, 0.1)');
-      gradient.addColorStop(0.5, 'rgba(59, 130, 246, 0.1)');
-      gradient.addColorStop(1, 'rgba(16, 185, 129, 0.1)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
-
       if (isActive) {
-        // Draw wave
-        ctx.beginPath();
-        ctx.strokeStyle = isListening ? '#10b981' : '#3b82f6';
-        ctx.lineWidth = 2;
+        const dotSize = 3;
+        const spacing = width / dots;
+        const centerY = height / 2;
         
-        for (let x = 0; x < width; x += 5) {
-          const amplitude = isListening ? 30 : 15;
-          const frequency = isListening ? 0.02 : 0.01;
-          const y = height / 2 + Math.sin((x + phase) * frequency) * amplitude * Math.sin(phase * 0.01);
+        for (let i = 0; i < dots; i++) {
+          const x = i * spacing + spacing / 2;
+          const amplitude = isListening ? 15 : 8;
+          const y = centerY + Math.sin((i + phase) * 0.2) * amplitude * (isListening ? Math.random() * 0.5 + 0.5 : 0.3);
           
-          if (x === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
+          ctx.fillStyle = '#8B2F33';
+          ctx.beginPath();
+          ctx.arc(x, y, dotSize, 0, Math.PI * 2);
+          ctx.fill();
         }
-        
-        ctx.stroke();
-        phase += isListening ? 4 : 2;
       } else {
-        // Draw static line
-        ctx.beginPath();
-        ctx.strokeStyle = 'rgba(156, 163, 175, 0.3)';
-        ctx.lineWidth = 1;
-        ctx.moveTo(0, height / 2);
-        ctx.lineTo(width, height / 2);
-        ctx.stroke();
+        const dotSize = 2;
+        const spacing = width / dots;
+        const centerY = height / 2;
+        
+        for (let i = 0; i < dots; i++) {
+          const x = i * spacing + spacing / 2;
+          ctx.fillStyle = 'rgba(139, 47, 51, 0.3)';
+          ctx.beginPath();
+          ctx.arc(x, centerY, dotSize, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-
+      
+      phase += isListening ? 0.15 : 0.05;
       animationRef.current = requestAnimationFrame(draw);
     };
 
@@ -118,48 +173,49 @@ const FuturisticAudioVisualizer = ({ isActive, isListening }) => {
   return (
     <canvas 
       ref={canvasRef} 
-      className="w-full h-32"
-      width={800}
-      height={128}
+      className="w-full h-full"
+      width={600}
+      height={60}
     />
   );
 };
 
-// Componente de transcrição
-const TranscriptionDisplay = ({ messages }) => {
+// Componente de chat clean
+const ChatMessages = ({ messages }) => {
   const scrollRef = useRef(null);
-
+  
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
-
+  
   return (
-    <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 h-64 overflow-hidden">
-      <div ref={scrollRef} className="h-full overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-gray-700">
+    <div className="h-full bg-gray-50 rounded-2xl p-6">
+      <div ref={scrollRef} className="h-full overflow-y-auto space-y-4">
         {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <MessageCircle className="h-8 w-8 mr-2" />
-            <span>Aguardando conversa...</span>
+          <div className="flex flex-col items-center justify-center h-full text-gray-400">
+            <MessageCircle className="h-10 w-10 mb-3" />
+            <p className="text-base">Inicie uma conversa com a Hanna</p>
+            <p className="text-sm">Clique no botão abaixo para começar</p>
           </div>
         ) : (
           messages.map((msg, idx) => (
             <div
-              key={idx}
+              key={msg.id || idx}
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] px-4 py-2 rounded-2xl ${
+                className={`max-w-[80%] px-5 py-3 rounded-2xl ${
                   msg.role === 'user'
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                    ? 'bg-[#8B2F33] text-white'
+                    : 'bg-white border border-gray-200'
                 }`}
               >
-                <div className="text-xs opacity-70 mb-1">
-                  {msg.role === 'user' ? 'Visitante' : 'Hanna'}
+                <div className="text-xs opacity-70 mb-1 font-medium">
+                  {msg.role === 'user' ? 'Você' : 'Hanna'}
                 </div>
-                <div className="text-sm">{msg.text || '...'}</div>
+                <div className="text-sm leading-relaxed">{msg.text || '...'}</div>
               </div>
             </div>
           ))
@@ -177,9 +233,8 @@ export default function HannaConsole() {
   const [error, setError] = useState(null);
   const [audioStream, setAudioStream] = useState(null);
   const [isListening, setIsListening] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
-  const [inputMode, setInputMode] = useState('voice'); // 'voice' ou 'keyboard'
-  const [textInput, setTextInput] = useState('');
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const [visitorInfo, setVisitorInfo] = useState({
     name: '',
     email: '',
@@ -190,14 +245,19 @@ export default function HannaConsole() {
   const dcRef = useRef(null);
   const audioRef = useRef(null);
 
-  // Send event through data channel - DEFINIDA PRIMEIRO
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const sendEvent = useCallback((event) => {
     if (dcRef.current && dcRef.current.readyState === 'open') {
       dcRef.current.send(JSON.stringify(event));
     }
   }, []);
 
-  // Send text message
   const sendTextMessage = useCallback((text) => {
     sendEvent({
       type: 'conversation.item.create',
@@ -212,12 +272,19 @@ export default function HannaConsole() {
     });
   }, [sendEvent]);
 
-  // Handle incoming realtime events - AGORA PODE USAR sendEvent
   const handleRealtimeEvent = useCallback((event) => {
     switch (event.type) {
       case 'error':
         console.error('Server error:', event.error);
         setError(event.error.message || 'Erro no servidor');
+        break;
+
+      case 'session.created':
+        console.log('Session created:', event.session);
+        break;
+
+      case 'session.updated':
+        console.log('Session updated:', event.session);
         break;
 
       case 'conversation.item.created':
@@ -228,13 +295,17 @@ export default function HannaConsole() {
               return [...prev, {
                 id: event.item.id,
                 role: event.item.role,
-                text: event.item.content?.[0]?.text || '',
+                text: event.item.content?.[0]?.text || event.item.content?.[0]?.transcript || '',
                 timestamp: Date.now(),
               }];
             }
             return prev;
           });
         }
+        break;
+
+      case 'conversation.item.truncated':
+        console.log('Item truncated:', event.item_id);
         break;
 
       case 'conversation.item.input_audio_transcription.completed':
@@ -245,8 +316,12 @@ export default function HannaConsole() {
         ));
         break;
 
-      case 'response.text.delta':
+      case 'conversation.item.input_audio_transcription.failed':
+        console.error('Transcription failed:', event.error);
+        break;
+
       case 'response.audio_transcript.delta':
+      case 'response.text.delta':
         setMessages(prev => prev.map(m => 
           m.id === event.item_id 
             ? { ...m, text: (m.text || '') + event.delta }
@@ -254,11 +329,18 @@ export default function HannaConsole() {
         ));
         break;
 
-      case 'response.text.done':
       case 'response.audio_transcript.done':
         setMessages(prev => prev.map(m => 
           m.id === event.item_id 
-            ? { ...m, text: event.text || event.transcript }
+            ? { ...m, text: event.transcript }
+            : m
+        ));
+        break;
+
+      case 'response.text.done':
+        setMessages(prev => prev.map(m => 
+          m.id === event.item_id 
+            ? { ...m, text: event.text }
             : m
         ));
         break;
@@ -271,8 +353,18 @@ export default function HannaConsole() {
         setIsListening(false);
         break;
 
+      case 'input_audio_buffer.committed':
+        break;
+
+      case 'response.audio.delta':
+        setIsSpeaking(true);
+        break;
+
+      case 'response.audio.done':
+        setIsSpeaking(false);
+        break;
+      
       case 'response.function_call_arguments.done':
-        // Handle tool calls
         if (event.name === 'save_visitor_info') {
           try {
             const args = JSON.parse(event.arguments);
@@ -281,52 +373,31 @@ export default function HannaConsole() {
               [args.field]: args.value
             }));
             
-            // Send response back
             sendEvent({
               type: 'conversation.item.create',
               item: {
                 type: 'function_call_output',
                 call_id: event.call_id,
-                output: JSON.stringify({ success: true, message: 'Informação salva' })
+                output: JSON.stringify({ success: true, message: 'Informação salva com sucesso' })
               }
             });
           } catch (err) {
-            console.error('Error processing tool call:', err);
-          }
-        } else if (event.name === 'get_visitor_info') {
-          try {
-            const args = JSON.parse(event.arguments);
-            let output;
-            
-            if (args.field === 'all') {
-              output = visitorInfo;
-            } else {
-              output = { [args.field]: visitorInfo[args.field] || 'não informado' };
-            }
-            
-            sendEvent({
-              type: 'conversation.item.create',
-              item: {
-                type: 'function_call_output',
-                call_id: event.call_id,
-                output: JSON.stringify(output)
-              }
-            });
-          } catch (err) {
-            console.error('Error processing tool call:', err);
+            console.error('Error saving visitor info:', err);
           }
         }
         break;
-    }
-  }, [sendEvent, visitorInfo]);
 
-  // Initialize WebRTC connection
+      default:
+        break;
+    }
+  }, [sendEvent]);
+
   const initializeWebRTC = useCallback(async () => {
     try {
       setIsConnecting(true);
       setError(null);
+      setMessages([]); // Limpa mensagens antigas
 
-      // Get ephemeral token from server
       const sessionResponse = await fetch('/api/session');
       
       if (!sessionResponse.ok) {
@@ -337,27 +408,23 @@ export default function HannaConsole() {
       const sessionData = await sessionResponse.json();
       const ephemeralKey = sessionData.client_secret.value;
 
-      // Create RTCPeerConnection
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
       });
       pcRef.current = pc;
 
-      // Set up audio element
       if (!audioRef.current) {
         audioRef.current = document.createElement('audio');
         audioRef.current.autoplay = true;
         document.body.appendChild(audioRef.current);
       }
 
-      // Handle incoming audio track
       pc.ontrack = (e) => {
         if (e.track.kind === 'audio') {
           audioRef.current.srcObject = e.streams[0];
         }
       };
 
-      // Add local audio track
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -370,39 +437,35 @@ export default function HannaConsole() {
       setAudioStream(stream);
 
       const audioTrack = stream.getAudioTracks()[0];
-      
-      // Se estiver em modo teclado, desativa o microfone imediatamente
-      if (inputMode === 'keyboard') {
-        audioTrack.enabled = false;
-      }
-      
       pc.addTrack(audioTrack, stream);
 
-      // Create data channel
       const dc = pc.createDataChannel('oai-events', { ordered: true });
       dcRef.current = dc;
 
       dc.onopen = () => {
+        console.log('Data channel opened');
         setIsConnected(true);
         setIsConnecting(false);
-
-        // Send Hanna's configuration with optimized settings
-        sendEvent({
+        
+        const sessionConfig = {
           type: 'session.update',
           session: {
             instructions: HANNA_INSTRUCTIONS,
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
-            input_audio_transcription: { model: 'whisper-1' },
-            turn_detection: inputMode === 'voice' ? {
+            input_audio_transcription: { 
+              model: 'whisper-1',
+              language: 'pt'
+            },
+            turn_detection: {
               type: 'server_vad',
-              threshold: 0.5,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 600,
-            } : null,
-            voice: 'shimmer', // Voz feminina suave
-            temperature: 0.9, // Mais criatividade e variedade nas respostas
-            max_response_output_tokens: 500, // Suficiente para respostas curtas completas
+              threshold: 0.4,
+              prefix_padding_ms: 500,
+              silence_duration_ms: 800,
+            },
+            voice: 'shimmer',
+            temperature: 0.9,
+            max_response_output_tokens: 500,
             tools: [
               {
                 type: 'function',
@@ -423,32 +486,21 @@ export default function HannaConsole() {
                   },
                   required: ['field', 'value']
                 }
-              },
-              {
-                type: 'function',
-                name: 'get_visitor_info',
-                description: 'Recupera informações salvas do visitante',
-                parameters: {
-                  type: 'object',
-                  properties: {
-                    field: {
-                      type: 'string',
-                      enum: ['name', 'email', 'phone', 'all'],
-                      description: 'Tipo de informação a recuperar'
-                    }
-                  },
-                  required: ['field']
-                }
               }
             ],
             tool_choice: 'auto',
           },
-        });
+        };
+        
+        console.log('Sending session config:', sessionConfig);
+        sendEvent(sessionConfig);
 
-        // Send optimized welcome message
+        // <<< CORREÇÃO FINAL: Força a criação de uma resposta inicial
+        // Isso fará com que o assistente fale primeiro com base em suas instruções.
         setTimeout(() => {
-          sendTextMessage('Oi! Eu sou a Hanna, sua amiga virtual aqui do Impact Hub! Qual é o seu nome?');
-        }, 1000);
+          sendEvent({ type: 'response.create' });
+        }, 200); // Pequeno delay para garantir que a sessão foi atualizada
+
       };
 
       dc.onclose = () => {
@@ -457,7 +509,7 @@ export default function HannaConsole() {
 
       dc.onerror = (error) => {
         console.error('Data channel error:', error);
-        setError('Erro na conexão');
+        setError('Erro na conexão de dados.');
       };
 
       dc.onmessage = (e) => {
@@ -469,11 +521,9 @@ export default function HannaConsole() {
         }
       };
 
-      // Create and send offer
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      // Send offer to OpenAI
       const answerResponse = await fetch('https://api.openai.com/v1/realtime', {
         method: 'POST',
         headers: {
@@ -484,7 +534,8 @@ export default function HannaConsole() {
       });
 
       if (!answerResponse.ok) {
-        throw new Error('Falha ao conectar com OpenAI');
+        const errorText = await answerResponse.text();
+        throw new Error(`Falha ao conectar com OpenAI: ${errorText}`);
       }
 
       const answerSdp = await answerResponse.text();
@@ -500,9 +551,8 @@ export default function HannaConsole() {
       setIsConnecting(false);
       setIsConnected(false);
     }
-  }, [sendEvent, sendTextMessage, handleRealtimeEvent, inputMode]);
+  }, [sendEvent, handleRealtimeEvent]);
 
-  // Disconnect
   const disconnect = useCallback(() => {
     if (dcRef.current) {
       dcRef.current.close();
@@ -525,10 +575,10 @@ export default function HannaConsole() {
 
     setIsConnected(false);
     setIsListening(false);
+    setIsSpeaking(false);
     setMessages([]);
   }, [audioStream]);
 
-  // Toggle mute
   const toggleMute = useCallback(() => {
     if (audioStream) {
       audioStream.getAudioTracks().forEach(track => {
@@ -538,59 +588,6 @@ export default function HannaConsole() {
     }
   }, [audioStream, isMuted]);
 
-  // Toggle input mode (voice/keyboard)
-  const toggleInputMode = useCallback(() => {
-    const newMode = inputMode === 'voice' ? 'keyboard' : 'voice';
-    setInputMode(newMode);
-    
-    // Se mudando para teclado, desativa o microfone
-    if (newMode === 'keyboard' && audioStream) {
-      audioStream.getAudioTracks().forEach(track => {
-        track.enabled = false;
-      });
-    } else if (newMode === 'voice' && audioStream && !isMuted) {
-      audioStream.getAudioTracks().forEach(track => {
-        track.enabled = true;
-      });
-    }
-
-    // Atualiza a configuração de VAD
-    if (isConnected) {
-      sendEvent({
-        type: 'session.update',
-        session: {
-          turn_detection: newMode === 'voice' ? {
-            type: 'server_vad',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 600,
-          } : null,
-        },
-      });
-    }
-  }, [inputMode, audioStream, isMuted, isConnected, sendEvent]);
-
-  // Send text from input
-  const sendTextFromInput = useCallback(() => {
-    if (textInput.trim()) {
-      sendTextMessage(textInput.trim());
-      setTextInput('');
-      
-      // Se estiver em modo VAD desativado, cria resposta manualmente
-      if (inputMode === 'keyboard') {
-        setTimeout(() => {
-          sendEvent({ type: 'response.create' });
-        }, 100);
-      }
-    }
-  }, [textInput, sendTextMessage, inputMode, sendEvent]);
-
-  // Schedule visit with optimized message
-  const scheduleVisit = () => {
-    sendTextMessage('Quero agendar uma visita');
-  };
-
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (isConnected) {
@@ -600,246 +597,227 @@ export default function HannaConsole() {
   }, [isConnected, disconnect]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white overflow-hidden">
-      {/* Animated background */}
-      <div className="fixed inset-0 opacity-30">
-        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-emerald-500/10 blur-3xl animate-pulse" />
-      </div>
-
-      {/* Content */}
-      <div className="relative z-10 min-h-screen flex flex-col">
-        {/* Header */}
-        <header className="p-8">
-          <div className="max-w-6xl mx-auto flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <div className="absolute inset-0 bg-emerald-500 blur-xl opacity-50 animate-pulse" />
-                <div className="relative bg-gradient-to-r from-emerald-400 to-blue-500 p-3 rounded-2xl">
-                  <Sparkles className="h-8 w-8 text-white" />
-                </div>
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-6">
+              <div className="bg-[#8B2F33] px-8 py-4 rounded-lg">
+                <h1 className="text-white text-2xl font-bold tracking-wider">
+                  IMPACT HUB
+                </h1>
               </div>
+              <div className="h-12 w-px bg-gray-300" />
               <div>
-                <h1 className="text-3xl font-light">Hanna</h1>
-                <p className="text-sm text-gray-400">Assistente Virtual • Impact Hub Pedra Branca</p>
+                <p className="text-gray-600 text-sm">Assistente Virtual</p>
+                <p className="text-2xl font-light text-gray-900">Hanna</p>
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
-              {isConnected && (
-                <div className="text-sm text-gray-400 flex items-center space-x-2">
-                  {inputMode === 'voice' ? (
-                    <>
-                      <Mic className="h-4 w-4" />
-                      <span>Modo Voz</span>
-                    </>
-                  ) : (
-                    <>
-                      <Keyboard className="h-4 w-4" />
-                      <span>Modo Teclado</span>
-                    </>
-                  )}
-                </div>
-              )}
-              
-              <button
-                onClick={() => setShowInfo(!showInfo)}
-                className="p-3 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
-              >
-                <MapPin className="h-5 w-5" />
-              </button>
+            <div className="text-right">
+              <div className="text-3xl font-light text-gray-900 tabular-nums">
+                {currentTime.toLocaleTimeString('pt-BR', { 
+                  hour: '2-digit', 
+                  minute: '2-digit'
+                })}
+              </div>
+              <div className="text-sm text-gray-500 capitalize">
+                {currentTime.toLocaleDateString('pt-BR', { 
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long'
+                })}
+              </div>
             </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* Main content */}
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="max-w-4xl w-full space-y-8">
-            {/* Audio Visualizer */}
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/20 to-blue-500/20 blur-2xl" />
-              <div className="relative bg-gray-900/60 backdrop-blur-xl rounded-3xl p-8 border border-gray-800">
-                <FuturisticAudioVisualizer 
-                  isActive={isConnected} 
-                  isListening={isListening} 
-                />
-                
-                <div className="mt-6 flex items-center justify-center space-x-4">
-                  {!isConnected ? (
-                    <button
-                      onClick={initializeWebRTC}
-                      disabled={isConnecting}
-                      className="group relative px-8 py-4 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full font-medium transition-all hover:shadow-lg hover:shadow-emerald-500/25 disabled:opacity-50"
-                    >
-                      {isConnecting ? (
-                        <div className="flex items-center space-x-2">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          <span>Conectando...</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-2">
-                          <MessageCircle className="h-5 w-5" />
-                          <span>Iniciar Conversa</span>
-                        </div>
-                      )}
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={toggleInputMode}
-                        className="p-4 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-all"
-                        title={inputMode === 'voice' ? 'Mudar para teclado' : 'Mudar para voz'}
-                      >
-                        {inputMode === 'voice' ? <Keyboard className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-                      </button>
-
-                      {inputMode === 'voice' && (
-                        <button
-                          onClick={toggleMute}
-                          className={`p-4 rounded-full transition-all ${
-                            isMuted 
-                              ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' 
-                              : 'bg-gray-800/50 hover:bg-gray-700/50'
-                          }`}
-                        >
-                          {isMuted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-                        </button>
-                      )}
-                      
-                      <button
-                        onClick={disconnect}
-                        className="px-6 py-3 bg-gray-800/50 hover:bg-gray-700/50 rounded-full transition-colors"
-                      >
-                        Encerrar
-                      </button>
-                    </>
+      {/* Conteúdo Principal */}
+      <div className="max-w-7xl mx-auto px-8 py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Coluna Esquerda */}
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+              <div className="flex flex-col items-center space-y-6">
+                <div className="relative">
+                  <div className="w-36 h-36 rounded-full bg-gray-50 flex items-center justify-center overflow-hidden">
+                    <HannaAvatar isListening={isListening} isSpeaking={isSpeaking} />
+                  </div>
+                  {isConnected && (
+                    <div className="absolute -bottom-2 -right-2">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                        isListening ? 'bg-green-500 animate-pulse' : 'bg-gray-300'
+                      }`}>
+                        <div className="w-3 h-3 bg-white rounded-full" />
+                      </div>
+                    </div>
                   )}
+                </div>
+
+                <div className="text-center">
+                  <h2 className="text-2xl font-medium text-gray-900">Hanna</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {isConnected ? 'Pronta para conversar' : 'Offline'}
+                  </p>
                 </div>
 
                 {isConnected && (
-                  <div className="mt-4 space-y-3">
-                    {/* Status indicator */}
-                    <div className="flex items-center justify-center space-x-2 text-sm text-gray-400">
-                      {inputMode === 'voice' ? (
-                        <>
-                          <div className={`h-2 w-2 rounded-full ${isListening ? 'bg-emerald-500 animate-pulse' : 'bg-gray-600'}`} />
-                          <span>{isListening ? 'Ouvindo...' : 'Aguardando fala...'}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Keyboard className="h-4 w-4" />
-                          <span>Modo teclado ativo</span>
-                        </>
-                      )}
-                    </div>
+                  <div className="w-full h-16 bg-gray-50 rounded-lg p-2">
+                    <AudioVisualizer isActive={isConnected} isListening={isListening} />
+                  </div>
+                )}
 
-                    {/* Text input for keyboard mode */}
-                    {inputMode === 'keyboard' && (
-                      <div className="flex items-center space-x-2 max-w-md mx-auto">
-                        <input
-                          type="text"
-                          value={textInput}
-                          onChange={(e) => setTextInput(e.target.value)}
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                              sendTextFromInput();
-                            }
-                          }}
-                          placeholder="Digite sua mensagem..."
-                          className="flex-1 px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition-colors"
-                        />
-                        <button
-                          onClick={sendTextFromInput}
-                          disabled={!textInput.trim()}
-                          className="p-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-700 disabled:opacity-50 rounded-full transition-colors"
-                        >
-                          <Send className="h-5 w-5" />
-                        </button>
-                      </div>
+                {!isConnected ? (
+                  <button
+                    onClick={initializeWebRTC}
+                    disabled={isConnecting}
+                    className="w-full bg-[#8B2F33] hover:bg-[#7A282C] text-white rounded-xl px-6 py-4 font-medium transition-colors flex items-center justify-center space-x-3"
+                  >
+                    {isConnecting ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span>Conectando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Headphones className="h-5 w-5" />
+                        <span>Iniciar Conversa</span>
+                      </>
                     )}
+                  </button>
+                ) : (
+                  <div className="w-full space-y-3">
+                    <div className="flex items-center justify-center space-x-3">
+                      <button
+                        onClick={toggleMute}
+                        className={`p-3 rounded-lg transition-colors ${
+                          isMuted 
+                            ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                      </button>
+                      
+                      <button
+                        onClick={disconnect}
+                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg px-4 py-3 font-medium transition-colors"
+                      >
+                        Encerrar
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Transcription */}
-            <TranscriptionDisplay messages={messages} />
-
-            {/* Quick actions */}
-            {isConnected && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-center space-x-4">
-                  <button
-                    onClick={scheduleVisit}
-                    className="flex items-center space-x-2 px-4 py-2 bg-gray-800/50 hover:bg-gray-700/50 rounded-full transition-colors text-sm"
-                  >
-                    <Calendar className="h-4 w-4" />
-                    <span>Agendar Visita</span>
-                  </button>
-                  <button
-                    onClick={() => sendTextMessage('Quais são os planos?')}
-                    className="flex items-center space-x-2 px-4 py-2 bg-gray-800/50 hover:bg-gray-700/50 rounded-full transition-colors text-sm"
-                  >
-                    <span>Ver Planos</span>
-                  </button>
+            <div className="bg-gray-50 rounded-2xl p-6 space-y-4">
+              <h3 className="font-medium text-gray-900 mb-4">Informações Impact Hub</h3>
+              
+              <div className="space-y-3">
+                <div className="flex items-start space-x-3">
+                  <MapPin className="h-5 w-5 text-[#8B2F33] mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-gray-900">Pedra Branca</p>
+                    <p className="text-gray-600">Rua Jair Hamms, 38</p>
+                  </div>
                 </div>
                 
-                {/* Debug info - remova em produção */}
-                {(visitorInfo.name || visitorInfo.email || visitorInfo.phone) && (
-                  <div className="text-xs text-gray-500 text-center space-y-1">
-                    {visitorInfo.name && <div>Nome: {visitorInfo.name}</div>}
-                    {visitorInfo.email && <div>Email: {visitorInfo.email}</div>}
-                    {visitorInfo.phone && <div>Telefone: {visitorInfo.phone}</div>}
+                <div className="flex items-center space-x-3">
+                  <Clock className="h-5 w-5 text-[#8B2F33]" />
+                  <p className="text-sm text-gray-600">Seg-Sex • 8h às 18h</p>
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <Phone className="h-5 w-5 text-[#8B2F33]" />
+                  <p className="text-sm text-gray-600">(48) 3374-7862</p>
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <Mail className="h-5 w-5 text-[#8B2F33]" />
+                  <p className="text-sm text-gray-600">contato@impacthub.com.br</p>
+                </div>
+              </div>
+              
+              {visitorInfo.name && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <p className="text-xs text-gray-500">Visitante: {visitorInfo.name}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Coluna Direita */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 h-[500px]">
+              <div className="p-6 border-b border-gray-100">
+                <h3 className="text-lg font-medium text-gray-900 flex items-center space-x-2">
+                  <MessageCircle className="h-5 w-5" />
+                  <span>Conversa</span>
+                </h3>
+              </div>
+              <div className="h-[calc(100%-80px)]">
+                <ChatMessages messages={messages} />
+              </div>
+            </div>
+
+            {isConnected && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button
+                  onClick={() => sendTextMessage('Quero agendar uma visita')}
+                  className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl p-6 transition-all group"
+                >
+                  <div className="flex flex-col items-center space-y-3">
+                    <div className="w-12 h-12 bg-[#8B2F33] bg-opacity-10 rounded-lg flex items-center justify-center group-hover:bg-opacity-20 transition-colors">
+                      <Coffee className="h-6 w-6 text-[#8B2F33]" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">Agendar Visita</span>
                   </div>
-                )}
+                </button>
+                
+                <button
+                  onClick={() => sendTextMessage('Quais são os planos disponíveis?')}
+                  className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl p-6 transition-all group"
+                >
+                  <div className="flex flex-col items-center space-y-3">
+                    <div className="w-12 h-12 bg-[#8B2F33] bg-opacity-10 rounded-lg flex items-center justify-center group-hover:bg-opacity-20 transition-colors">
+                      <Users className="h-6 w-6 text-[#8B2F33]" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">Nossos Planos</span>
+                  </div>
+                </button>
+                
+                <button
+                  onClick={() => sendTextMessage('Como funciona o espaço de coworking?')}
+                  className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl p-6 transition-all group"
+                >
+                  <div className="flex flex-col items-center space-y-3">
+                    <div className="w-12 h-12 bg-[#8B2F33] bg-opacity-10 rounded-lg flex items-center justify-center group-hover:bg-opacity-20 transition-colors">
+                      <MapPin className="h-6 w-6 text-[#8B2F33]" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">Sobre o Espaço</span>
+                  </div>
+                </button>
               </div>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Info panel */}
-        {showInfo && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-8" onClick={() => setShowInfo(false)}>
-            <div className="bg-gray-900/90 backdrop-blur-xl rounded-3xl p-8 max-w-md border border-gray-800" onClick={e => e.stopPropagation()}>
-              <h3 className="text-xl font-light mb-6">Impact Hub Pedra Branca</h3>
-              
-              <div className="space-y-4 text-sm">
-                <div className="flex items-start space-x-3">
-                  <MapPin className="h-5 w-5 text-emerald-400 mt-0.5" />
-                  <div>
-                    <p>Passeio Pedra Branca</p>
-                    <p className="text-gray-400">Rua Jair Hamms, 38 - Sala 101B</p>
-                    <p className="text-gray-400">Edifício Atrium Offices</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-3">
-                  <Clock className="h-5 w-5 text-emerald-400" />
-                  <p>Segunda a Sexta • 8h às 18h</p>
-                </div>
-                
-                <div className="flex items-center space-x-3">
-                  <Volume2 className="h-5 w-5 text-emerald-400" />
-                  <p>(48) 3374-7862</p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setShowInfo(false)}
-                className="mt-6 w-full py-3 bg-gray-800/50 hover:bg-gray-700/50 rounded-full transition-colors"
-              >
-                Fechar
-              </button>
+      {/* Mensagem de Erro */}
+      {error && (
+        <div className="fixed bottom-8 right-8 max-w-md bg-red-50 border border-red-200 rounded-xl p-4 shadow-lg">
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0 text-red-500">⚠️</div>
+            <div>
+              <p className="text-sm font-medium text-red-900">Ocorreu um Erro</p>
+              <p className="text-sm text-red-700 mt-1">{error}</p>
             </div>
           </div>
-        )}
-
-        {/* Error message */}
-        {error && (
-          <div className="fixed bottom-8 left-8 right-8 max-w-md mx-auto bg-red-500/20 backdrop-blur-xl border border-red-500/50 rounded-2xl p-4 text-red-300 text-sm">
-            {error}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
