@@ -25,72 +25,14 @@
   transition-duration: 200ms;
 }
 
-/* Button hover effects */
-button {
-  transition: all 0.2s ease;
+/* Custom scrollbar hide */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-button:active {
-  transform: scale(0.98);
-}
-
-/* Card shadows */
-.shadow-soft {
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
-}
-
-.shadow-medium {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f3f4f6;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
-}
-
-/* Selection */
-::selection {
-  background: rgba(139, 47, 51, 0.2);
-  color: inherit;
-}
-
-/* Focus styles */
-:focus {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(139, 47, 51, 0.1);
-}
-
-/* Loading dots animation */
-@keyframes loading-dots {
-  0%, 20% {
-    content: '.';
-  }
-  40% {
-    content: '..';
-  }
-  60%, 100% {
-    content: '...';
-  }
-}
-
-.loading-dots::after {
-  content: '.';
-  animation: loading-dots 1.5s infinite;
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 /* Smooth fade in */
@@ -106,10 +48,24 @@ button:active {
 }
 
 .animate-fadeIn {
-  animation: fadeIn 0.3s ease-out;
+  animation: fadeIn 0.5s ease-out;
 }
 
-/* Pulse animation for status indicators */
+/* Look animation for eye */
+@keyframes look {
+  0%, 100% {
+    transform: translateX(-10px);
+  }
+  50% {
+    transform: translateX(10px);
+  }
+}
+
+.animate-look {
+  animation: look 3s ease-in-out infinite;
+}
+
+/* Pulse animation */
 @keyframes pulse {
   0%, 100% {
     opacity: 1;
@@ -123,95 +79,11 @@ button:active {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Spin animation for loading */
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-/* Impact Hub brand colors */
-.bg-impact-red {
-  background-color: #8B2F33;
-}
-
-.text-impact-red {
-  color: #8B2F33;
-}
-
-.border-impact-red {
-  border-color: #8B2F33;
-}
-
-.hover\:bg-impact-red-dark:hover {
-  background-color: #7A282C;
-}
-
-/* Typography helpers */
-.text-balance {
-  text-wrap: balance;
-}
-
-/* Layout helpers */
-.min-h-screen-safe {
-  min-height: 100vh;
-  min-height: 100dvh;
-}
-
-/* Accessibility helpers */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
-
-/* Print styles */
-@media print {
+/* Vertical monitor specific styles */
+@media screen and (orientation: portrait) and (min-width: 1080px) {
   body {
-    background: white;
+    font-size: 18px;
   }
-  
-  .no-print {
-    display: none !important;
-  }
-}
-
-/* Responsive utilities */
-@media (max-width: 768px) {
-  .grid-cols-3 {
-    grid-template-columns: 1fr;
-  }
-  
-  .lg\:col-span-2 {
-    grid-column: span 1;
-  }
-  
-  .text-3xl {
-    font-size: 1.875rem;
-  }
-  
-  .px-8 {
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-  }
-}
-
-/* Dark mode support (caso queira adicionar no futuro) */
-@media (prefers-color-scheme: dark) {
-  /* Mantém o tema claro por padrão no Impact Hub */
 }
 
 /* High contrast mode support */

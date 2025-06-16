@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, MicOff, Volume2, Loader2, MessageCircle, Phone, Mail, MapPin, Clock, ChevronRight, Headphones, Coffee, Users } from 'lucide-react';
+import { Mic, MicOff, Loader2, MessageCircle, Camera, Sparkles, Hand, Users, Coffee, Eye, EyeOff } from 'lucide-react';
 
 const HANNA_INSTRUCTIONS = `Você é a Hanna, assistente virtual super animada e carismática do Impact Hub Pedra Branca em Palhoça/SC. 
 
@@ -17,6 +17,11 @@ REGRAS ESSENCIAIS:
 4. Use linguagem informal e amigável
 5. Foque no Impact Hub mas com personalidade
 6. SEMPRE responda por voz, mesmo quando receber texto
+
+QUANDO DETECTAR ALGUÉM:
+- Cumprimente de forma calorosa e diferente a cada vez
+- Varie entre: "Oi! Que bom ver você!", "Olá! Bem-vindo ao Impact Hub!", "Oba! Uma visita!", "Que legal! Seja muito bem-vindo!"
+- Se a pessoa se afastar e voltar depois de alguns minutos, cumprimente novamente mas reconheça que já se viram
 
 CAPTURA DE INFORMAÇÕES:
 - Quando o visitante disser o nome dele, use a função save_visitor_info com field='name' e value='nome_informado'
@@ -36,8 +41,189 @@ SOBRE O ESPAÇO:
 - Comunidade vibrante de empreendedores
 - Ambiente super inovador e inspirador!`;
 
-// Avatar animado minimalista da Hanna
-const HannaAvatar = ({ isListening, isSpeaking }) => {
+// Tela de espera minimalista e hipnotizante
+const WelcomeScreen = ({ currentTime }) => {
+  const canvasRef = useRef(null);
+  const animationRef = useRef(null);
+  const [pulseScale, setPulseScale] = useState(1);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    let phase = 0;
+    let particles = [];
+
+    // Criar partículas orbitais
+    for (let i = 0; i < 60; i++) {
+      particles.push({
+        angle: (Math.PI * 2 / 60) * i,
+        radius: 150 + Math.random() * 100,
+        size: 1 + Math.random() * 2,
+        speed: 0.001 + Math.random() * 0.002,
+        opacity: 0.1 + Math.random() * 0.3
+      });
+    }
+
+    const draw = () => {
+      // Fundo com gradiente sutil
+      const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, width);
+      gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+      gradient.addColorStop(1, 'rgba(245, 245, 245, 1)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      // Desenhar círculos concêntricos com fade
+      for (let i = 5; i > 0; i--) {
+        const radius = 80 * i + Math.sin(phase * 0.5) * 10;
+        const opacity = 0.05 * (6 - i) / 5;
+        
+        ctx.strokeStyle = `rgba(139, 47, 51, ${opacity})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Núcleo central pulsante
+      const coreRadius = 50 + Math.sin(phase) * 5;
+      const coreGradient = ctx.createRadialGradient(
+        centerX, 
+        centerY - 10, 
+        0, 
+        centerX, 
+        centerY, 
+        coreRadius
+      );
+      coreGradient.addColorStop(0, 'rgba(139, 47, 51, 0.2)');
+      coreGradient.addColorStop(0.5, 'rgba(139, 47, 51, 0.1)');
+      coreGradient.addColorStop(1, 'rgba(139, 47, 51, 0)');
+      
+      ctx.fillStyle = coreGradient;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, coreRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Desenhar partículas orbitais
+      particles.forEach(particle => {
+        particle.angle += particle.speed;
+        const x = centerX + Math.cos(particle.angle + phase * 0.1) * particle.radius;
+        const y = centerY + Math.sin(particle.angle + phase * 0.1) * particle.radius;
+        
+        ctx.fillStyle = `rgba(139, 47, 51, ${particle.opacity})`;
+        ctx.beginPath();
+        ctx.arc(x, y, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Onda expansiva ocasional
+      if (phase % 200 < 100) {
+        const waveRadius = (phase % 200) * 3;
+        const waveOpacity = 1 - (phase % 200) / 100;
+        
+        ctx.strokeStyle = `rgba(139, 47, 51, ${waveOpacity * 0.2})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, waveRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      phase += 1;
+      animationRef.current = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    // Animação de pulso do texto
+    const pulseInterval = setInterval(() => {
+      setPulseScale(prev => prev === 1 ? 1.05 : 1);
+    }, 2000);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      clearInterval(pulseInterval);
+    };
+  }, []);
+
+  const greeting = () => {
+    const hour = currentTime.getHours();
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
+
+  return (
+    <div className="min-h-screen bg-white flex flex-col relative overflow-hidden">
+      {/* Canvas de animação de fundo */}
+      <canvas
+        ref={canvasRef}
+        width={1080}
+        height={1920}
+        className="absolute inset-0 opacity-60"
+      />
+
+      {/* Conteúdo principal */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-20">
+        {/* Logo minimalista */}
+        <div className="mb-20">
+          <div className="bg-[#8B2F33] w-32 h-32 rounded-full flex items-center justify-center shadow-2xl transform hover:scale-110 transition-transform duration-700">
+            <div className="text-white text-4xl font-bold">IH</div>
+          </div>
+        </div>
+
+        {/* Mensagem principal */}
+        <div className="text-center space-y-8 max-w-3xl">
+          <h1 
+            className="text-7xl font-extralight text-gray-900 leading-tight transition-transform duration-1000"
+            style={{ transform: `scale(${pulseScale})` }}
+          >
+            {greeting()}
+          </h1>
+          
+          <p className="text-3xl text-gray-600 font-light">
+            Aproxime-se para conversar
+          </p>
+
+          {/* Indicador visual minimalista */}
+          <div className="mt-16 flex justify-center">
+            <div className="relative">
+              {/* Olho estilizado */}
+              <div className="w-24 h-12 border-2 border-[#8B2F33] rounded-full relative overflow-hidden">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-8 h-8 bg-[#8B2F33] rounded-full animate-look" />
+                </div>
+              </div>
+              
+              {/* Texto sutil */}
+              <p className="text-sm text-gray-400 mt-4 absolute -bottom-10 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
+                Estou te procurando
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Impact Hub sutil no rodapé */}
+        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2">
+          <p className="text-xl font-light text-gray-400 tracking-widest">IMPACT HUB</p>
+        </div>
+      </div>
+
+      {/* Gradiente inferior sutil */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-gray-50 to-transparent" />
+    </div>
+  );
+};
+
+// Avatar animado da Hanna
+const HannaAvatar = ({ isListening, isSpeaking, hasVisitor }) => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
   
@@ -56,37 +242,67 @@ const HannaAvatar = ({ isListening, isSpeaking }) => {
     const draw = () => {
       ctx.clearRect(0, 0, width, height);
       
-      const layers = 3;
+      // Círculos de fundo animados
+      const layers = 4;
       for (let i = layers; i > 0; i--) {
-        const radius = 40 * (i / layers);
-        const scale = isListening ? 1.15 : (isSpeaking ? 1.1 : 1);
-        const animatedRadius = radius * scale + Math.sin(phase + i) * 2;
+        const radius = 50 * (i / layers);
+        const scale = hasVisitor ? 1.3 : (isListening ? 1.2 : (isSpeaking ? 1.15 : 1));
+        const animatedRadius = radius * scale + Math.sin(phase + i) * 3;
         
-        ctx.fillStyle = `rgba(139, 47, 51, ${0.1 * (layers - i + 1) / layers})`;
+        const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, animatedRadius);
+        gradient.addColorStop(0, `rgba(139, 47, 51, ${0.15 * (layers - i + 1) / layers})`);
+        gradient.addColorStop(1, `rgba(139, 47, 51, ${0.05 * (layers - i + 1) / layers})`);
+        
+        ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(centerX, centerY, animatedRadius, 0, Math.PI * 2);
         ctx.fill();
       }
       
-      ctx.fillStyle = '#8B2F33';
+      // Núcleo central
+      const coreGradient = ctx.createRadialGradient(centerX, centerY - 5, 0, centerX, centerY, 20);
+      coreGradient.addColorStop(0, '#A03439');
+      coreGradient.addColorStop(1, '#8B2F33');
+      
+      ctx.fillStyle = coreGradient;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 15 + Math.sin(phase * 2) * 1, 0, Math.PI * 2);
+      ctx.arc(centerX, centerY, 18 + Math.sin(phase * 2) * 2, 0, Math.PI * 2);
       ctx.fill();
       
-      if (isSpeaking || isListening) {
-        for (let i = 0; i < 2; i++) {
-          const waveRadius = 50 + i * 20 + (phase * 30) % 40;
-          const waveOpacity = Math.max(0, 1 - waveRadius / 100) * 0.3;
+      // Efeito de brilho
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.beginPath();
+      ctx.arc(centerX - 5, centerY - 5, 5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Ondas sonoras quando falando/ouvindo ou detectando visitante
+      if (isSpeaking || isListening || hasVisitor) {
+        for (let i = 0; i < 3; i++) {
+          const waveRadius = 60 + i * 25 + (phase * 40) % 60;
+          const waveOpacity = Math.max(0, 1 - waveRadius / 150) * 0.4;
           
           ctx.strokeStyle = `rgba(139, 47, 51, ${waveOpacity})`;
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.arc(centerX, centerY, waveRadius, 0, Math.PI * 2);
           ctx.stroke();
         }
+        
+        // Partículas
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI * 2 / 6) * i + phase;
+          const distance = 40 + Math.sin(phase * 3 + i) * 10;
+          const x = centerX + Math.cos(angle) * distance;
+          const y = centerY + Math.sin(angle) * distance;
+          
+          ctx.fillStyle = `rgba(139, 47, 51, ${0.4 + Math.sin(phase * 2 + i) * 0.2})`;
+          ctx.beginPath();
+          ctx.arc(x, y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       
-      phase += 0.02;
+      phase += hasVisitor ? 0.05 : 0.03;
       animationRef.current = requestAnimationFrame(draw);
     };
     
@@ -97,19 +313,146 @@ const HannaAvatar = ({ isListening, isSpeaking }) => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isListening, isSpeaking]);
+  }, [isListening, isSpeaking, hasVisitor]);
   
   return (
     <canvas 
       ref={canvasRef} 
       className="w-full h-full"
-      width={150}
-      height={150}
+      width={300}
+      height={300}
     />
   );
 };
 
-// Visualizador de áudio minimalista
+// Componente de detecção facial INVISÍVEL
+const FaceDetection = ({ onFaceDetected, onFaceLost, isActive }) => {
+  const videoRef = useRef(null);
+  const detectionRef = useRef(null);
+  const lastDetectionRef = useRef(0);
+  const faceDetectedRef = useRef(false);
+
+  useEffect(() => {
+    let stream = null;
+    let model = null;
+
+    const loadModel = async () => {
+      // Carrega o modelo de detecção facial
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js';
+      script.async = true;
+      document.body.appendChild(script);
+
+      const script2 = document.createElement('script');
+      script2.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';
+      script2.async = true;
+      document.body.appendChild(script2);
+
+      script.onload = () => {
+        script2.onload = async () => {
+          if (window.FaceDetection) {
+            model = new window.FaceDetection({
+              locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`;
+              }
+            });
+
+            model.setOptions({
+              model: 'short_range',
+              minDetectionConfidence: 0.5
+            });
+
+            model.onResults(onResults);
+
+            await model.initialize();
+            startCamera();
+          }
+        };
+      };
+    };
+
+    const startCamera = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: 640, 
+            height: 480,
+            facingMode: 'user'
+          } 
+        });
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          
+          const camera = new window.Camera(videoRef.current, {
+            onFrame: async () => {
+              if (model && videoRef.current) {
+                await model.send({ image: videoRef.current });
+              }
+            },
+            width: 640,
+            height: 480
+          });
+          
+          camera.start();
+        }
+      } catch (err) {
+        console.error('Erro ao acessar câmera:', err);
+      }
+    };
+
+    const onResults = (results) => {
+      if (results.detections.length > 0) {
+        const now = Date.now();
+
+        // Se não tinha face detectada antes e agora tem
+        if (!faceDetectedRef.current) {
+          faceDetectedRef.current = true;
+          lastDetectionRef.current = now;
+          
+          // Aguarda 0.5 segundo de detecção contínua antes de notificar
+          setTimeout(() => {
+            if (faceDetectedRef.current) {
+              onFaceDetected();
+            }
+          }, 500);
+        }
+        
+        lastDetectionRef.current = now;
+      } else {
+        // Se tinha face detectada e agora não tem mais
+        if (faceDetectedRef.current && Date.now() - lastDetectionRef.current > 3000) {
+          faceDetectedRef.current = false;
+          onFaceLost();
+        }
+      }
+    };
+
+    if (isActive) {
+      loadModel();
+    }
+
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      if (detectionRef.current) {
+        clearInterval(detectionRef.current);
+      }
+    };
+  }, [onFaceDetected, onFaceLost, isActive]);
+
+  return (
+    <video 
+      ref={videoRef}
+      className="hidden"
+      autoPlay 
+      playsInline
+    />
+  );
+};
+
+// Visualizador de áudio
 const AudioVisualizer = ({ isActive, isListening }) => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
@@ -123,41 +466,40 @@ const AudioVisualizer = ({ isActive, isListening }) => {
     const height = canvas.height;
     
     let phase = 0;
-    const dots = 40;
+    const bars = 50;
 
     const draw = () => {
       ctx.clearRect(0, 0, width, height);
       
       if (isActive) {
-        const dotSize = 3;
-        const spacing = width / dots;
+        const barWidth = width / bars;
         const centerY = height / 2;
         
-        for (let i = 0; i < dots; i++) {
-          const x = i * spacing + spacing / 2;
-          const amplitude = isListening ? 15 : 8;
-          const y = centerY + Math.sin((i + phase) * 0.2) * amplitude * (isListening ? Math.random() * 0.5 + 0.5 : 0.3);
+        for (let i = 0; i < bars; i++) {
+          const x = i * barWidth;
+          const amplitude = isListening ? 25 : 15;
+          const frequency = 0.1 + (i / bars) * 0.1;
+          const barHeight = Math.abs(Math.sin((i + phase) * frequency) * amplitude * (isListening ? Math.random() * 0.7 + 0.3 : 0.5));
           
-          ctx.fillStyle = '#8B2F33';
-          ctx.beginPath();
-          ctx.arc(x, y, dotSize, 0, Math.PI * 2);
-          ctx.fill();
+          const gradient = ctx.createLinearGradient(x, centerY - barHeight, x, centerY + barHeight);
+          gradient.addColorStop(0, 'rgba(139, 47, 51, 0.8)');
+          gradient.addColorStop(0.5, 'rgba(139, 47, 51, 1)');
+          gradient.addColorStop(1, 'rgba(139, 47, 51, 0.8)');
+          
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x, centerY - barHeight, barWidth - 2, barHeight * 2);
         }
       } else {
-        const dotSize = 2;
-        const spacing = width / dots;
+        // Estado inativo - linha sutil
         const centerY = height / 2;
-        
-        for (let i = 0; i < dots; i++) {
-          const x = i * spacing + spacing / 2;
-          ctx.fillStyle = 'rgba(139, 47, 51, 0.3)';
-          ctx.beginPath();
-          ctx.arc(x, centerY, dotSize, 0, Math.PI * 2);
-          ctx.fill();
+        for (let i = 0; i < bars; i++) {
+          const x = i * (width / bars);
+          ctx.fillStyle = 'rgba(139, 47, 51, 0.2)';
+          ctx.fillRect(x, centerY - 1, (width / bars) - 2, 2);
         }
       }
       
-      phase += isListening ? 0.15 : 0.05;
+      phase += isListening ? 0.2 : 0.08;
       animationRef.current = requestAnimationFrame(draw);
     };
 
@@ -174,13 +516,13 @@ const AudioVisualizer = ({ isActive, isListening }) => {
     <canvas 
       ref={canvasRef} 
       className="w-full h-full"
-      width={600}
-      height={60}
+      width={800}
+      height={80}
     />
   );
 };
 
-// Componente de chat clean
+// Componente de chat
 const ChatMessages = ({ messages }) => {
   const scrollRef = useRef(null);
   
@@ -191,36 +533,165 @@ const ChatMessages = ({ messages }) => {
   }, [messages]);
   
   return (
-    <div className="h-full bg-gray-50 rounded-2xl p-6">
-      <div ref={scrollRef} className="h-full overflow-y-auto space-y-4">
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400">
-            <MessageCircle className="h-10 w-10 mb-3" />
-            <p className="text-base">Inicie uma conversa com a Hanna</p>
-            <p className="text-sm">Clique no botão abaixo para começar</p>
-          </div>
-        ) : (
-          messages.map((msg, idx) => (
+    <div className="h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-3xl p-10">
+      <div ref={scrollRef} className="h-full overflow-y-auto scrollbar-hide space-y-6">
+        {messages.map((msg, idx) => (
+          <div
+            key={msg.id || idx}
+            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}
+          >
             <div
-              key={msg.id || idx}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`max-w-[85%] px-8 py-6 rounded-3xl shadow-lg transform transition-all hover:scale-[1.02] ${
+                msg.role === 'user'
+                  ? 'bg-gradient-to-br from-[#8B2F33] to-[#A03439] text-white'
+                  : 'bg-white border border-gray-100'
+              }`}
             >
-              <div
-                className={`max-w-[80%] px-5 py-3 rounded-2xl ${
-                  msg.role === 'user'
-                    ? 'bg-[#8B2F33] text-white'
-                    : 'bg-white border border-gray-200'
-                }`}
-              >
-                <div className="text-xs opacity-70 mb-1 font-medium">
-                  {msg.role === 'user' ? 'Você' : 'Hanna'}
+              <div className="text-sm opacity-70 mb-2 font-medium flex items-center gap-2">
+                {msg.role === 'user' ? (
+                  <>
+                    <Users className="h-4 w-4" />
+                    Visitante
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Hanna
+                  </>
+                )}
+              </div>
+              <div className="text-xl leading-relaxed">{msg.text || '...'}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Indicador de nível de ruído
+const NoiseIndicator = ({ audioLevel, isSpeechDetected }) => {
+  const getNoiseLevel = () => {
+    if (audioLevel < 10) return { text: 'Silencioso', color: 'text-green-500' };
+    if (audioLevel < 30) return { text: 'Normal', color: 'text-blue-500' };
+    if (audioLevel < 50) return { text: 'Barulhento', color: 'text-yellow-500' };
+    return { text: 'Muito barulhento', color: 'text-red-500' };
+  };
+
+  const noise = getNoiseLevel();
+
+  return (
+    <div className="fixed bottom-4 left-4 bg-white rounded-lg shadow-lg p-3 text-xs">
+      <div className="flex items-center gap-2">
+        <div className={`w-2 h-2 rounded-full ${isSpeechDetected ? 'bg-green-500' : 'bg-gray-300'}`} />
+        <span className="text-gray-600">Ambiente:</span>
+        <span className={noise.color}>{noise.text}</span>
+      </div>
+    </div>
+  );
+};
+
+// Tela de conversa minimalista
+const ConversationScreen = ({ 
+  currentTime,
+  greeting,
+  isConnected,
+  hasVisitor,
+  isListening,
+  isSpeaking,
+  messages,
+  visitorInfo,
+  error,
+  audioLevel,
+  isSpeechDetected
+}) => {
+  return (
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* Header minimalista */}
+      <header className="px-12 py-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-6">
+            <div className="bg-[#8B2F33] w-16 h-16 rounded-full flex items-center justify-center">
+              <span className="text-white text-xl font-bold">IH</span>
+            </div>
+            <div>
+              <p className="text-gray-500 text-sm">Assistente Virtual</p>
+              <p className="text-2xl font-light text-gray-900">Hanna</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Conteúdo Principal */}
+      <div className="flex-1 px-12 py-6 overflow-hidden">
+        <div className="h-full flex gap-8">
+          {/* Coluna esquerda - Avatar minimalista */}
+          <div className="w-[400px] flex-shrink-0">
+            <div className="bg-gray-50 rounded-3xl p-10 h-full flex flex-col items-center justify-center">
+              <div className="relative mb-8">
+                <div className="w-48 h-48 rounded-full bg-white flex items-center justify-center shadow-lg">
+                  <HannaAvatar isListening={isListening} isSpeaking={isSpeaking} hasVisitor={hasVisitor} />
                 </div>
-                <div className="text-sm leading-relaxed">{msg.text || '...'}</div>
+                {isConnected && (
+                  <div className="absolute -bottom-2 -right-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md ${
+                      hasVisitor ? 'bg-green-500 animate-pulse' : 'bg-gray-300'
+                    }`}>
+                      <div className="w-4 h-4 bg-white rounded-full" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <h2 className="text-3xl font-light text-gray-900 mb-2">Hanna</h2>
+              <p className="text-base text-gray-500 mb-8">
+                {!isConnected ? (
+                  'Conectando...'
+                ) : (
+                  'Conversando com você'
+                )}
+              </p>
+
+              {isConnected && (
+                <div className="w-full h-16 bg-white rounded-2xl p-2 shadow-inner">
+                  <AudioVisualizer isActive={isConnected} isListening={isListening} />
+                </div>
+              )}
+              
+              {visitorInfo.name && (
+                <div className="mt-6 text-center">
+                  <p className="text-lg text-[#8B2F33]">Olá, {visitorInfo.name}! 👋</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Área de Chat */}
+          <div className="flex-1 min-w-0">
+            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 h-full flex flex-col overflow-hidden">
+              <div className="p-8 border-b border-gray-100">
+                <h3 className="text-2xl font-light text-gray-900 flex items-center space-x-3">
+                  <MessageCircle className="h-6 w-6 text-[#8B2F33]" />
+                  <span>Conversa</span>
+                </h3>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <ChatMessages messages={messages} />
               </div>
             </div>
-          ))
-        )}
+          </div>
+        </div>
       </div>
+
+      {/* Indicador de ruído */}
+      <NoiseIndicator audioLevel={audioLevel} isSpeechDetected={isSpeechDetected} />
+
+      {/* Mensagem de Erro minimalista */}
+      {error && (
+        <div className="fixed bottom-12 right-12 max-w-md bg-white border border-red-200 rounded-2xl p-6 shadow-lg">
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
     </div>
   );
 };
@@ -235,6 +706,10 @@ export default function HannaConsole() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [hasVisitor, setHasVisitor] = useState(false);
+  const [showConversation, setShowConversation] = useState(false);
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [isSpeechDetected, setIsSpeechDetected] = useState(false);
   const [visitorInfo, setVisitorInfo] = useState({
     name: '',
     email: '',
@@ -244,12 +719,61 @@ export default function HannaConsole() {
   const pcRef = useRef(null);
   const dcRef = useRef(null);
   const audioRef = useRef(null);
+  const lastGreetingRef = useRef(0);
+  const sessionActiveRef = useRef(false);
+  const inactivityTimerRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Função para analisar nível de áudio
+  const setupAudioAnalyser = useCallback((stream) => {
+    if (!stream) return;
+
+    try {
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      
+      analyserRef.current.fftSize = 256;
+      analyserRef.current.minDecibels = -90;
+      analyserRef.current.maxDecibels = -10;
+      analyserRef.current.smoothingTimeConstant = 0.85;
+      
+      source.connect(analyserRef.current);
+      
+      const checkAudioLevel = () => {
+        if (!analyserRef.current) return;
+        
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        analyserRef.current.getByteFrequencyData(dataArray);
+        
+        // Calcula o nível médio de áudio
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        setAudioLevel(average);
+        
+        // Detecção de fala baseada em frequência
+        // Fala humana geralmente está entre 85-255 Hz e 300-3400 Hz
+        const speechFrequencies = dataArray.slice(2, 50); // Aproximadamente 85-2000 Hz
+        const speechAverage = speechFrequencies.reduce((a, b) => a + b) / speechFrequencies.length;
+        
+        // Só considera fala se o nível for significativo e nas frequências corretas
+        const isSpeech = speechAverage > 30 && average > 20;
+        setIsSpeechDetected(isSpeech);
+        
+        requestAnimationFrame(checkAudioLevel);
+      };
+      
+      checkAudioLevel();
+    } catch (err) {
+      console.error('Erro ao configurar analisador de áudio:', err);
+    }
   }, []);
 
   const sendEvent = useCallback((event) => {
@@ -276,7 +800,10 @@ export default function HannaConsole() {
     switch (event.type) {
       case 'error':
         console.error('Server error:', event.error);
-        setError(event.error.message || 'Erro no servidor');
+        // Só mostra erro se não for relacionado a ruído
+        if (!event.error.message?.includes('noise') && !event.error.message?.includes('unclear')) {
+          setError(event.error.message || 'Erro no servidor');
+        }
         break;
 
       case 'session.created':
@@ -289,18 +816,24 @@ export default function HannaConsole() {
 
       case 'conversation.item.created':
         if (event.item.type === 'message') {
-          setMessages(prev => {
-            const existing = prev.find(m => m.id === event.item.id);
-            if (!existing) {
-              return [...prev, {
-                id: event.item.id,
-                role: event.item.role,
-                text: event.item.content?.[0]?.text || event.item.content?.[0]?.transcript || '',
-                timestamp: Date.now(),
-              }];
-            }
-            return prev;
-          });
+          // Só adiciona mensagem se tiver conteúdo significativo
+          const text = event.item.content?.[0]?.text || event.item.content?.[0]?.transcript || '';
+          
+          // Filtra mensagens muito curtas ou fragmentadas
+          if (text.length > 3 && !text.match(/^(\.|,|!|\?|hmm|uh|eh|ah|oh)$/i)) {
+            setMessages(prev => {
+              const existing = prev.find(m => m.id === event.item.id);
+              if (!existing) {
+                return [...prev, {
+                  id: event.item.id,
+                  role: event.item.role,
+                  text: text,
+                  timestamp: Date.now(),
+                }];
+              }
+              return prev;
+            });
+          }
         }
         break;
 
@@ -309,11 +842,14 @@ export default function HannaConsole() {
         break;
 
       case 'conversation.item.input_audio_transcription.completed':
-        setMessages(prev => prev.map(m => 
-          m.id === event.item_id 
-            ? { ...m, text: event.transcript }
-            : m
-        ));
+        // Só atualiza se a transcrição for significativa
+        if (event.transcript && event.transcript.length > 3) {
+          setMessages(prev => prev.map(m => 
+            m.id === event.item_id 
+              ? { ...m, text: event.transcript }
+              : m
+          ));
+        }
         break;
 
       case 'conversation.item.input_audio_transcription.failed':
@@ -346,7 +882,14 @@ export default function HannaConsole() {
         break;
 
       case 'input_audio_buffer.speech_started':
-        setIsListening(true);
+        // Só marca como listening se realmente detectar fala
+        if (isSpeechDetected) {
+          setIsListening(true);
+          sessionActiveRef.current = true;
+          if (inactivityTimerRef.current) {
+            clearTimeout(inactivityTimerRef.current);
+          }
+        }
         break;
 
       case 'input_audio_buffer.speech_stopped':
@@ -362,6 +905,15 @@ export default function HannaConsole() {
 
       case 'response.audio.done':
         setIsSpeaking(false);
+        // Start inactivity timer
+        inactivityTimerRef.current = setTimeout(() => {
+          if (!sessionActiveRef.current) {
+            setShowConversation(false);
+            setHasVisitor(false);
+            setMessages([]);
+            setVisitorInfo({ name: '', email: '', phone: '' });
+          }
+        }, 45000); // 45 segundos de inatividade
         break;
       
       case 'response.function_call_arguments.done':
@@ -390,13 +942,12 @@ export default function HannaConsole() {
       default:
         break;
     }
-  }, [sendEvent]);
+  }, [isSpeechDetected, sendEvent]);
 
   const initializeWebRTC = useCallback(async () => {
     try {
       setIsConnecting(true);
       setError(null);
-      setMessages([]); // Limpa mensagens antigas
 
       const sessionResponse = await fetch('/api/session');
       
@@ -425,13 +976,20 @@ export default function HannaConsole() {
         }
       };
 
+      // CONFIGURAÇÕES DE ÁUDIO MELHORADAS PARA AMBIENTES BARULHENTOS
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
+          noiseSuppression: true,      // Crítico para ambientes barulhentos
           autoGainControl: true,
           sampleRate: 24000,
           channelCount: 1,
+          // Configurações adicionais para melhor captação
+          googEchoCancellation: true,
+          googAutoGainControl: true,
+          googNoiseSuppression: true,
+          googHighpassFilter: true,
+          googTypingNoiseDetection: true
         } 
       });
       setAudioStream(stream);
@@ -450,7 +1008,15 @@ export default function HannaConsole() {
         const sessionConfig = {
           type: 'session.update',
           session: {
-            instructions: HANNA_INSTRUCTIONS,
+            instructions: HANNA_INSTRUCTIONS + `
+
+IMPORTANTE PARA AMBIENTES BARULHENTOS:
+- APENAS responda quando tiver CERTEZA de que alguém está falando DIRETAMENTE com você
+- Ignore ruídos de fundo, conversas distantes e sons ambiente
+- Espere por frases completas e claras antes de responder
+- Se não entender claramente, peça para a pessoa repetir
+- NÃO responda a fragmentos de conversa ou palavras soltas
+- Aguarde pelo menos 2 segundos de silêncio antes de responder`,
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
             input_audio_transcription: { 
@@ -459,12 +1025,13 @@ export default function HannaConsole() {
             },
             turn_detection: {
               type: 'server_vad',
-              threshold: 0.4,
-              prefix_padding_ms: 500,
-              silence_duration_ms: 800,
+              threshold: 0.7,              // AUMENTADO de 0.4 para 0.7 (mais rigoroso)
+              prefix_padding_ms: 300,      // REDUZIDO de 500 para 300
+              silence_duration_ms: 1500,   // AUMENTADO de 800 para 1500 (espera mais silêncio)
+              speech_threshold: 0.8,       // NOVO: threshold adicional
             },
             voice: 'shimmer',
-            temperature: 0.9,
+            temperature: 0.7,              // REDUZIDO de 0.9 para 0.7 (menos criativo, mais focado)
             max_response_output_tokens: 500,
             tools: [
               {
@@ -494,13 +1061,6 @@ export default function HannaConsole() {
         
         console.log('Sending session config:', sessionConfig);
         sendEvent(sessionConfig);
-
-        // <<< CORREÇÃO FINAL: Força a criação de uma resposta inicial
-        // Isso fará com que o assistente fale primeiro com base em suas instruções.
-        setTimeout(() => {
-          sendEvent({ type: 'response.create' });
-        }, 200); // Pequeno delay para garantir que a sessão foi atualizada
-
       };
 
       dc.onclose = () => {
@@ -573,6 +1133,11 @@ export default function HannaConsole() {
       audioRef.current.srcObject = null;
     }
 
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
     setIsConnected(false);
     setIsListening(false);
     setIsSpeaking(false);
@@ -588,236 +1153,116 @@ export default function HannaConsole() {
     }
   }, [audioStream, isMuted]);
 
+  // Função chamada quando detecta um rosto
+  const handleFaceDetected = useCallback(() => {
+    const now = Date.now();
+    
+    // Evita cumprimentar múltiplas vezes em sequência
+    if (now - lastGreetingRef.current < 60000) return; // 1 minuto entre cumprimentos
+    
+    lastGreetingRef.current = now;
+    setHasVisitor(true);
+    setShowConversation(true);
+    sessionActiveRef.current = true;
+
+    // Clear any existing inactivity timer
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+
+    // Envia comando para o assistente cumprimentar
+    if (isConnected) {
+      setTimeout(() => {
+        sendEvent({ type: 'response.create' });
+      }, 500);
+    }
+  }, [isConnected, sendEvent]);
+
+  // Função chamada quando perde o rosto
+  const handleFaceLost = useCallback(() => {
+    sessionActiveRef.current = false;
+    
+    // Start timer to return to welcome screen
+    inactivityTimerRef.current = setTimeout(() => {
+      if (!sessionActiveRef.current) {
+        setShowConversation(false);
+        setHasVisitor(false);
+        setMessages([]);
+        setVisitorInfo({ name: '', email: '', phone: '' });
+      }
+    }, 20000); // 20 segundos após perder o rosto
+  }, []);
+
+  // Modifique a inicialização do áudio para incluir o analisador
+  useEffect(() => {
+    if (audioStream) {
+      setupAudioAnalyser(audioStream);
+    }
+    
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, [audioStream, setupAudioAnalyser]);
+
+  // Inicializa automaticamente a conexão ao carregar
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isConnected && !isConnecting) {
+        initializeWebRTC();
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (isConnected) {
         disconnect();
       }
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
     };
   }, [isConnected, disconnect]);
 
+  const greeting = () => {
+    const hour = currentTime.getHours();
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
+
+  // Renderiza a tela apropriada
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
-              <div className="bg-[#8B2F33] px-8 py-4 rounded-lg">
-                <h1 className="text-white text-2xl font-bold tracking-wider">
-                  IMPACT HUB
-                </h1>
-              </div>
-              <div className="h-12 w-px bg-gray-300" />
-              <div>
-                <p className="text-gray-600 text-sm">Assistente Virtual</p>
-                <p className="text-2xl font-light text-gray-900">Hanna</p>
-              </div>
-            </div>
-
-            <div className="text-right">
-              <div className="text-3xl font-light text-gray-900 tabular-nums">
-                {currentTime.toLocaleTimeString('pt-BR', { 
-                  hour: '2-digit', 
-                  minute: '2-digit'
-                })}
-              </div>
-              <div className="text-sm text-gray-500 capitalize">
-                {currentTime.toLocaleDateString('pt-BR', { 
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long'
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Conteúdo Principal */}
-      <div className="max-w-7xl mx-auto px-8 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Coluna Esquerda */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
-              <div className="flex flex-col items-center space-y-6">
-                <div className="relative">
-                  <div className="w-36 h-36 rounded-full bg-gray-50 flex items-center justify-center overflow-hidden">
-                    <HannaAvatar isListening={isListening} isSpeaking={isSpeaking} />
-                  </div>
-                  {isConnected && (
-                    <div className="absolute -bottom-2 -right-2">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                        isListening ? 'bg-green-500 animate-pulse' : 'bg-gray-300'
-                      }`}>
-                        <div className="w-3 h-3 bg-white rounded-full" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="text-center">
-                  <h2 className="text-2xl font-medium text-gray-900">Hanna</h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {isConnected ? 'Pronta para conversar' : 'Offline'}
-                  </p>
-                </div>
-
-                {isConnected && (
-                  <div className="w-full h-16 bg-gray-50 rounded-lg p-2">
-                    <AudioVisualizer isActive={isConnected} isListening={isListening} />
-                  </div>
-                )}
-
-                {!isConnected ? (
-                  <button
-                    onClick={initializeWebRTC}
-                    disabled={isConnecting}
-                    className="w-full bg-[#8B2F33] hover:bg-[#7A282C] text-white rounded-xl px-6 py-4 font-medium transition-colors flex items-center justify-center space-x-3"
-                  >
-                    {isConnecting ? (
-                      <>
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        <span>Conectando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Headphones className="h-5 w-5" />
-                        <span>Iniciar Conversa</span>
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <div className="w-full space-y-3">
-                    <div className="flex items-center justify-center space-x-3">
-                      <button
-                        onClick={toggleMute}
-                        className={`p-3 rounded-lg transition-colors ${
-                          isMuted 
-                            ? 'bg-red-100 text-red-600 hover:bg-red-200' 
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                      </button>
-                      
-                      <button
-                        onClick={disconnect}
-                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg px-4 py-3 font-medium transition-colors"
-                      >
-                        Encerrar
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-gray-50 rounded-2xl p-6 space-y-4">
-              <h3 className="font-medium text-gray-900 mb-4">Informações Impact Hub</h3>
-              
-              <div className="space-y-3">
-                <div className="flex items-start space-x-3">
-                  <MapPin className="h-5 w-5 text-[#8B2F33] mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-gray-900">Pedra Branca</p>
-                    <p className="text-gray-600">Rua Jair Hamms, 38</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-3">
-                  <Clock className="h-5 w-5 text-[#8B2F33]" />
-                  <p className="text-sm text-gray-600">Seg-Sex • 8h às 18h</p>
-                </div>
-                
-                <div className="flex items-center space-x-3">
-                  <Phone className="h-5 w-5 text-[#8B2F33]" />
-                  <p className="text-sm text-gray-600">(48) 3374-7862</p>
-                </div>
-                
-                <div className="flex items-center space-x-3">
-                  <Mail className="h-5 w-5 text-[#8B2F33]" />
-                  <p className="text-sm text-gray-600">contato@impacthub.com.br</p>
-                </div>
-              </div>
-              
-              {visitorInfo.name && (
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <p className="text-xs text-gray-500">Visitante: {visitorInfo.name}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Coluna Direita */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 h-[500px]">
-              <div className="p-6 border-b border-gray-100">
-                <h3 className="text-lg font-medium text-gray-900 flex items-center space-x-2">
-                  <MessageCircle className="h-5 w-5" />
-                  <span>Conversa</span>
-                </h3>
-              </div>
-              <div className="h-[calc(100%-80px)]">
-                <ChatMessages messages={messages} />
-              </div>
-            </div>
-
-            {isConnected && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button
-                  onClick={() => sendTextMessage('Quero agendar uma visita')}
-                  className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl p-6 transition-all group"
-                >
-                  <div className="flex flex-col items-center space-y-3">
-                    <div className="w-12 h-12 bg-[#8B2F33] bg-opacity-10 rounded-lg flex items-center justify-center group-hover:bg-opacity-20 transition-colors">
-                      <Coffee className="h-6 w-6 text-[#8B2F33]" />
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">Agendar Visita</span>
-                  </div>
-                </button>
-                
-                <button
-                  onClick={() => sendTextMessage('Quais são os planos disponíveis?')}
-                  className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl p-6 transition-all group"
-                >
-                  <div className="flex flex-col items-center space-y-3">
-                    <div className="w-12 h-12 bg-[#8B2F33] bg-opacity-10 rounded-lg flex items-center justify-center group-hover:bg-opacity-20 transition-colors">
-                      <Users className="h-6 w-6 text-[#8B2F33]" />
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">Nossos Planos</span>
-                  </div>
-                </button>
-                
-                <button
-                  onClick={() => sendTextMessage('Como funciona o espaço de coworking?')}
-                  className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl p-6 transition-all group"
-                >
-                  <div className="flex flex-col items-center space-y-3">
-                    <div className="w-12 h-12 bg-[#8B2F33] bg-opacity-10 rounded-lg flex items-center justify-center group-hover:bg-opacity-20 transition-colors">
-                      <MapPin className="h-6 w-6 text-[#8B2F33]" />
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">Sobre o Espaço</span>
-                  </div>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Mensagem de Erro */}
-      {error && (
-        <div className="fixed bottom-8 right-8 max-w-md bg-red-50 border border-red-200 rounded-xl p-4 shadow-lg">
-          <div className="flex items-start space-x-3">
-            <div className="flex-shrink-0 text-red-500">⚠️</div>
-            <div>
-              <p className="text-sm font-medium text-red-900">Ocorreu um Erro</p>
-              <p className="text-sm text-red-700 mt-1">{error}</p>
-            </div>
-          </div>
-        </div>
+    <>
+      {/* Detecção facial sempre ativa mas invisível */}
+      <FaceDetection 
+        onFaceDetected={handleFaceDetected}
+        onFaceLost={handleFaceLost}
+        isActive={isConnected}
+      />
+      
+      {/* Renderiza tela de espera ou conversa */}
+      {!showConversation ? (
+        <WelcomeScreen currentTime={currentTime} />
+      ) : (
+        <ConversationScreen
+          currentTime={currentTime}
+          greeting={greeting}
+          isConnected={isConnected}
+          hasVisitor={hasVisitor}
+          isListening={isListening}
+          isSpeaking={isSpeaking}
+          messages={messages}
+          visitorInfo={visitorInfo}
+          error={error}
+          audioLevel={audioLevel}
+          isSpeechDetected={isSpeechDetected}
+        />
       )}
-    </div>
+    </>
   );
 }
