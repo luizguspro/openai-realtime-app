@@ -1,45 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff, Loader2, MessageCircle, Camera, Sparkles, Hand, Users, Coffee, Eye, EyeOff } from 'lucide-react';
 
-const HANNA_INSTRUCTIONS = `Você é a Hanna, assistente virtual super animada e carismática do Impact Hub Pedra Branca em Palhoça/SC. 
+const HANNA_INSTRUCTIONS = `Você é a Hanna, assistente virtual do Impact Hub Pedra Branca.
 
-PERSONALIDADE:
-- Seja SUPER animada, alegre e acolhedora! 😊
-- Use expressões como "Que legal!", "Maravilha!", "Adorei!", "Oba!"
-- Faça pequenas brincadeiras e seja espontânea
-- Demonstre entusiasmo genuíno ao conversar
-- Use emojis na fala quando apropriado
-
-REGRAS ESSENCIAIS:
-1. Máximo 2-3 frases curtas, mas CHEIAS de energia!
-2. NUNCA corte palavras ou frases no meio
-3. Seja objetiva mas com muito carisma
-4. Use linguagem informal e amigável
-5. Foque no Impact Hub mas com personalidade
-6. SEMPRE responda por voz, mesmo quando receber texto
-
-QUANDO DETECTAR ALGUÉM:
-- Cumprimente de forma calorosa e diferente a cada vez
-- Varie entre: "Oi! Que bom ver você!", "Olá! Bem-vindo ao Impact Hub!", "Oba! Uma visita!", "Que legal! Seja muito bem-vindo!"
-- Se a pessoa se afastar e voltar depois de alguns minutos, cumprimente novamente mas reconheça que já se viram
-
-CAPTURA DE INFORMAÇÕES:
-- Quando o visitante disser o nome dele, use a função save_visitor_info com field='name' e value='nome_informado'
-- Exemplo: Se disser "Meu nome é João", use save_visitor_info(field='name', value='João')
-- Depois de salvar, confirme alegremente: "João! Que nome lindo! Prazer em conhecer você!"
-
-INFORMAÇÕES DO IMPACT HUB:
-- Local INCRÍVEL na Rua Jair Hamms, 38 - Pedra Branca
-- Telefone: (48) 3374-7862 
-- WhatsApp: (48) 92000-8625 (responde rapidinho!)
+ESCOPO RESTRITO: Você APENAS pode fornecer informações sobre:
 - Horário: Segunda a sexta, 8h às 18h
+- Endereço: Rua Jair Hamms, 38 - Pedra Branca, Palhoça/SC
+- Telefone: (48) 3374-7862
+- WhatsApp: (48) 92000-8625
+- Informações gerais sobre coworking e salas de reunião
 
-SOBRE O ESPAÇO:
-- Coworking mais TOP de Floripa!
-- Escritórios privativos super modernos
-- Salas de reunião incríveis
-- Comunidade vibrante de empreendedores
-- Ambiente super inovador e inspirador!`;
+REGRAS IMPORTANTES:
+1. Se a pergunta não for sobre o Impact Hub, responda EXATAMENTE: "Desculpe, só posso fornecer informações sobre o Impact Hub Pedra Branca. Como posso ajudar com isso?"
+2. Se não tiver uma informação específica, responda EXATAMENTE: "Não tenho essa informação específica. Posso ajudar com os horários ou contatos do Impact Hub?"
+3. NUNCA invente ou infira informações
+4. Seja direto e conciso
+5. Quando detectar alguém, cumprimente com: "Olá! Bem-vindo ao Impact Hub. Como posso ajudar?"
+6. Quando o visitante informar o nome, use save_visitor_info(field='name', value='nome')`;
 
 // Tela de espera minimalista e hipnotizante
 const WelcomeScreen = ({ currentTime }) => {
@@ -325,129 +302,122 @@ const HannaAvatar = ({ isListening, isSpeaking, hasVisitor }) => {
   );
 };
 
-// Componente de detecção facial INVISÍVEL
+// Componente de detecção facial OTIMIZADO
 const FaceDetection = ({ onFaceDetected, onFaceLost, isActive }) => {
   const videoRef = useRef(null);
-  const detectionRef = useRef(null);
-  const lastDetectionRef = useRef(0);
-  const faceDetectedRef = useRef(false);
+  const detectorRef = useRef(null);
+  const detectionIntervalRef = useRef(null);
+  const consecutiveDetectionsRef = useRef(0);
+  const facePresentRef = useRef(false);
+  const lastSeenRef = useRef(0);
+
+  // ==========================================
+  // PARÂMETROS ARQUITETURAIS AJUSTÁVEIS
+  // ==========================================
+  const DETECTION_INTERVAL_MS = 250; // 4x por segundo
+  const FRAMES_NEEDED_FOR_ACTIVATION = 4; // 1 segundo de atenção contínua
+  const MIN_DETECTION_CONFIDENCE = 0.5;
+  const SECONDS_TO_CONSIDER_LOST = 5;
 
   useEffect(() => {
-    let stream = null;
-    let model = null;
-
-    const loadModel = async () => {
-      // Carrega o modelo de detecção facial
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js';
-      script.async = true;
-      document.body.appendChild(script);
-
-      const script2 = document.createElement('script');
-      script2.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';
-      script2.async = true;
-      document.body.appendChild(script2);
-
-      script.onload = () => {
-        script2.onload = async () => {
-          if (window.FaceDetection) {
-            model = new window.FaceDetection({
-              locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`;
-              }
-            });
-
-            model.setOptions({
-              model: 'short_range',
-              minDetectionConfidence: 0.5
-            });
-
-            model.onResults(onResults);
-
-            await model.initialize();
-            startCamera();
-          }
-        };
-      };
-    };
-
-    const startCamera = async () => {
+    const initialize = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            width: 640, 
-            height: 480,
-            facingMode: 'user'
-          } 
-        });
+        // Importação dinâmica do MediaPipe
+        const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision');
         
+        const vision = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+        );
+        
+        detectorRef.current = await FaceDetector.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+            delegate: 'GPU',
+          },
+          minDetectionConfidence: MIN_DETECTION_CONFIDENCE,
+          runningMode: 'VIDEO',
+        });
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, facingMode: 'user' },
+        });
+
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          
-          const camera = new window.Camera(videoRef.current, {
-            onFrame: async () => {
-              if (model && videoRef.current) {
-                await model.send({ image: videoRef.current });
-              }
-            },
-            width: 640,
-            height: 480
-          });
-          
-          camera.start();
+          videoRef.current.onloadeddata = () => {
+            startDetectionLoop();
+          };
         }
       } catch (err) {
-        console.error('Erro ao acessar câmera:', err);
+        console.error('[FaceDetection] Erro ao inicializar:', err);
       }
     };
 
-    const onResults = (results) => {
-      if (results.detections.length > 0) {
-        const now = Date.now();
+    const startDetectionLoop = () => {
+      if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
 
-        // Se não tinha face detectada antes e agora tem
-        if (!faceDetectedRef.current) {
-          faceDetectedRef.current = true;
-          lastDetectionRef.current = now;
-          
-          // Aguarda 0.5 segundo de detecção contínua antes de notificar
-          setTimeout(() => {
-            if (faceDetectedRef.current) {
-              onFaceDetected();
+      detectionIntervalRef.current = setInterval(async () => {
+        if (detectorRef.current && videoRef.current && videoRef.current.readyState >= 3) {
+          try {
+            const detections = detectorRef.current.detectForVideo(videoRef.current, Date.now());
+
+            if (detections.detections.length > 0) {
+              handleFacePresent();
+            } else {
+              handleFaceAbsent();
             }
-          }, 500);
+          } catch (err) {
+            console.error('[FaceDetection] Erro na detecção:', err);
+          }
         }
-        
-        lastDetectionRef.current = now;
-      } else {
-        // Se tinha face detectada e agora não tem mais
-        if (faceDetectedRef.current && Date.now() - lastDetectionRef.current > 3000) {
-          faceDetectedRef.current = false;
-          onFaceLost();
-        }
+      }, DETECTION_INTERVAL_MS);
+    };
+
+    const handleFacePresent = () => {
+      lastSeenRef.current = Date.now();
+      consecutiveDetectionsRef.current++;
+
+      if (!facePresentRef.current && consecutiveDetectionsRef.current >= FRAMES_NEEDED_FOR_ACTIVATION) {
+        console.log('[FaceDetection] Rosto detectado - ativando conversa');
+        facePresentRef.current = true;
+        onFaceDetected();
+      }
+    };
+
+    const handleFaceAbsent = () => {
+      consecutiveDetectionsRef.current = 0;
+
+      if (facePresentRef.current && (Date.now() - lastSeenRef.current) > (SECONDS_TO_CONSIDER_LOST * 1000)) {
+        console.log('[FaceDetection] Rosto perdido - desativando conversa');
+        facePresentRef.current = false;
+        onFaceLost();
       }
     };
 
     if (isActive) {
-      loadModel();
+      initialize();
     }
 
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
       }
-      if (detectionRef.current) {
-        clearInterval(detectionRef.current);
+      if (videoRef.current && videoRef.current.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      }
+      if (detectorRef.current) {
+        detectorRef.current.close();
       }
     };
-  }, [onFaceDetected, onFaceLost, isActive]);
+  }, [isActive, onFaceDetected, onFaceLost]);
 
   return (
     <video 
       ref={videoRef}
       className="hidden"
-      autoPlay 
+      autoPlay
       playsInline
+      muted
     />
   );
 };
@@ -569,7 +539,23 @@ const ChatMessages = ({ messages }) => {
   );
 };
 
-// Indicador de nível de ruído
+// Indicador de status da detecção facial (para debug)
+const FaceDetectionStatus = ({ hasVisitor, isConnected }) => {
+  if (process.env.NODE_ENV !== 'development') return null;
+  
+  return (
+    <div className="fixed top-4 left-4 bg-black/80 text-white rounded-lg p-3 text-xs font-mono">
+      <div className="flex items-center gap-2">
+        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+        <span>Detecção: {isConnected ? 'Ativa' : 'Inativa'}</span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        <div className={`w-3 h-3 rounded-full ${hasVisitor ? 'bg-green-500' : 'bg-gray-500'}`} />
+        <span>Visitante: {hasVisitor ? 'Presente' : 'Ausente'}</span>
+      </div>
+    </div>
+  );
+};
 const NoiseIndicator = ({ audioLevel, isSpeechDetected }) => {
   const getNoiseLevel = () => {
     if (audioLevel < 10) return { text: 'Silencioso', color: 'text-green-500' };
@@ -800,6 +786,7 @@ export default function HannaConsole() {
     switch (event.type) {
       case 'error':
         console.error('Server error:', event.error);
+        console.error('Error details:', JSON.stringify(event.error, null, 2));
         // Só mostra erro se não for relacionado a ruído
         if (!event.error.message?.includes('noise') && !event.error.message?.includes('unclear')) {
           setError(event.error.message || 'Erro no servidor');
@@ -983,13 +970,7 @@ export default function HannaConsole() {
           noiseSuppression: true,      // Crítico para ambientes barulhentos
           autoGainControl: true,
           sampleRate: 24000,
-          channelCount: 1,
-          // Configurações adicionais para melhor captação
-          googEchoCancellation: true,
-          googAutoGainControl: true,
-          googNoiseSuppression: true,
-          googHighpassFilter: true,
-          googTypingNoiseDetection: true
+          channelCount: 1
         } 
       });
       setAudioStream(stream);
@@ -1010,13 +991,15 @@ export default function HannaConsole() {
           session: {
             instructions: HANNA_INSTRUCTIONS + `
 
-IMPORTANTE PARA AMBIENTES BARULHENTOS:
-- APENAS responda quando tiver CERTEZA de que alguém está falando DIRETAMENTE com você
-- Ignore ruídos de fundo, conversas distantes e sons ambiente
-- Espere por frases completas e claras antes de responder
-- Se não entender claramente, peça para a pessoa repetir
-- NÃO responda a fragmentos de conversa ou palavras soltas
-- Aguarde pelo menos 2 segundos de silêncio antes de responder`,
+<noise_environment_protocol>
+  Para ambientes barulhentos:
+  - APENAS responda quando tiver CERTEZA de que alguém está falando DIRETAMENTE com você
+  - Ignore ruídos de fundo, conversas distantes e sons ambiente
+  - Espere por frases completas e claras antes de responder
+  - Se não entender claramente, responda: "Desculpe, não entendi. Pode repetir?"
+  - NÃO responda a fragmentos de conversa ou palavras soltas
+  - Aguarde pelo menos 2 segundos de silêncio antes de responder
+</noise_environment_protocol>`,
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
             input_audio_transcription: { 
@@ -1027,12 +1010,11 @@ IMPORTANTE PARA AMBIENTES BARULHENTOS:
               type: 'server_vad',
               threshold: 0.7,              // AUMENTADO de 0.4 para 0.7 (mais rigoroso)
               prefix_padding_ms: 300,      // REDUZIDO de 500 para 300
-              silence_duration_ms: 1500,   // AUMENTADO de 800 para 1500 (espera mais silêncio)
-              speech_threshold: 0.8,       // NOVO: threshold adicional
+              silence_duration_ms: 1500    // AUMENTADO de 800 para 1500 (espera mais silêncio)
             },
-            voice: 'shimmer',
-            temperature: 0.7,              // REDUZIDO de 0.9 para 0.7 (menos criativo, mais focado)
-            max_response_output_tokens: 500,
+            voice: 'nova',  // Voz válida e profissional
+            temperature: 0.6,              // Mínimo permitido pela API (mais focado e consistente)
+            max_response_output_tokens: 200,  // Reduzido para respostas mais concisas
             tools: [
               {
                 type: 'function',
@@ -1158,8 +1140,12 @@ IMPORTANTE PARA AMBIENTES BARULHENTOS:
     const now = Date.now();
     
     // Evita cumprimentar múltiplas vezes em sequência
-    if (now - lastGreetingRef.current < 60000) return; // 1 minuto entre cumprimentos
+    if (now - lastGreetingRef.current < 60000) {
+      console.log('[Hanna] Visitante já foi cumprimentado recentemente');
+      return;
+    }
     
+    console.log('[Hanna] Novo visitante detectado! Ativando conversa...');
     lastGreetingRef.current = now;
     setHasVisitor(true);
     setShowConversation(true);
@@ -1172,9 +1158,7 @@ IMPORTANTE PARA AMBIENTES BARULHENTOS:
 
     // Envia comando para o assistente cumprimentar
     if (isConnected) {
-      setTimeout(() => {
-        sendEvent({ type: 'response.create' });
-      }, 500);
+      sendEvent({ type: 'response.create' });
     }
   }, [isConnected, sendEvent]);
 
@@ -1244,6 +1228,9 @@ IMPORTANTE PARA AMBIENTES BARULHENTOS:
         onFaceLost={handleFaceLost}
         isActive={isConnected}
       />
+      
+      {/* Indicador de debug (apenas em desenvolvimento) */}
+      <FaceDetectionStatus hasVisitor={hasVisitor} isConnected={isConnected} />
       
       {/* Renderiza tela de espera ou conversa */}
       {!showConversation ? (
