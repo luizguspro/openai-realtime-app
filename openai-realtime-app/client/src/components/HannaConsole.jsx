@@ -1,22 +1,23 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff, Loader2, MessageCircle, Camera, Sparkles, Hand, Users, Coffee, Eye, EyeOff } from 'lucide-react';
+import FaceDetection from './FaceDetection';
 
 const HANNA_INSTRUCTIONS = `Você é a Hanna, assistente virtual do Impact Hub Pedra Branca.
 
-ESCOPO RESTRITO: Você APENAS pode fornecer informações sobre:
-- Horário: Segunda a sexta, 8h às 18h
-- Endereço: Rua Jair Hamms, 38 - Pedra Branca, Palhoça/SC
-- Telefone: (48) 3374-7862
-- WhatsApp: (48) 92000-8625
-- Informações gerais sobre coworking e salas de reunião
+IMPORTANTE: Você receberá contexto relevante baseado na pergunta do usuário. Use APENAS as informações fornecidas no contexto para responder.
 
-REGRAS IMPORTANTES:
-1. Se a pergunta não for sobre o Impact Hub, responda EXATAMENTE: "Desculpe, só posso fornecer informações sobre o Impact Hub Pedra Branca. Como posso ajudar com isso?"
-2. Se não tiver uma informação específica, responda EXATAMENTE: "Não tenho essa informação específica. Posso ajudar com os horários ou contatos do Impact Hub?"
-3. NUNCA invente ou infira informações
-4. Seja direto e conciso
+REGRAS FUNDAMENTAIS:
+1. SEMPRE baseie suas respostas EXCLUSIVAMENTE no contexto fornecido
+2. Se não houver contexto ou a informação não estiver no contexto, responda: "Desculpe, não encontrei essa informação em nossa base de dados. Posso ajudar com outra coisa?"
+3. NUNCA invente, infira ou complete informações
+4. Seja direto, conciso e amigável
 5. Quando detectar alguém, cumprimente com: "Olá! Bem-vindo ao Impact Hub. Como posso ajudar?"
-6. Quando o visitante informar o nome, use save_visitor_info(field='name', value='nome')`;
+6. Quando o visitante informar o nome, use save_visitor_info(field='name', value='nome')
+
+FORMATO DE RESPOSTA:
+- Responda de forma natural e conversacional
+- Use as informações do contexto sem citar que veio de um "contexto"
+- Seja específico quando houver múltiplas unidades ou informações`;
 
 // Tela de espera minimalista e hipnotizante
 const WelcomeScreen = ({ currentTime }) => {
@@ -302,126 +303,6 @@ const HannaAvatar = ({ isListening, isSpeaking, hasVisitor }) => {
   );
 };
 
-// Componente de detecção facial OTIMIZADO
-const FaceDetection = ({ onFaceDetected, onFaceLost, isActive }) => {
-  const videoRef = useRef(null);
-  const detectorRef = useRef(null);
-  const detectionIntervalRef = useRef(null);
-  const consecutiveDetectionsRef = useRef(0);
-  const facePresentRef = useRef(false);
-  const lastSeenRef = useRef(0);
-
-  // ==========================================
-  // PARÂMETROS ARQUITETURAIS AJUSTÁVEIS
-  // ==========================================
-  const DETECTION_INTERVAL_MS = 250; // 4x por segundo
-  const FRAMES_NEEDED_FOR_ACTIVATION = 4; // 1 segundo de atenção contínua
-  const MIN_DETECTION_CONFIDENCE = 0.5;
-  const SECONDS_TO_CONSIDER_LOST = 5;
-
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        // Importação dinâmica do MediaPipe
-        const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision');
-        
-        const vision = await FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
-        );
-        
-        detectorRef.current = await FaceDetector.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
-            delegate: 'GPU',
-          },
-          minDetectionConfidence: MIN_DETECTION_CONFIDENCE,
-          runningMode: 'VIDEO',
-        });
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 640, height: 480, facingMode: 'user' },
-        });
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.onloadeddata = () => {
-            startDetectionLoop();
-          };
-        }
-      } catch (err) {
-        console.error('[FaceDetection] Erro ao inicializar:', err);
-      }
-    };
-
-    const startDetectionLoop = () => {
-      if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
-
-      detectionIntervalRef.current = setInterval(async () => {
-        if (detectorRef.current && videoRef.current && videoRef.current.readyState >= 3) {
-          try {
-            const detections = detectorRef.current.detectForVideo(videoRef.current, Date.now());
-
-            if (detections.detections.length > 0) {
-              handleFacePresent();
-            } else {
-              handleFaceAbsent();
-            }
-          } catch (err) {
-            console.error('[FaceDetection] Erro na detecção:', err);
-          }
-        }
-      }, DETECTION_INTERVAL_MS);
-    };
-
-    const handleFacePresent = () => {
-      lastSeenRef.current = Date.now();
-      consecutiveDetectionsRef.current++;
-
-      if (!facePresentRef.current && consecutiveDetectionsRef.current >= FRAMES_NEEDED_FOR_ACTIVATION) {
-        console.log('[FaceDetection] Rosto detectado - ativando conversa');
-        facePresentRef.current = true;
-        onFaceDetected();
-      }
-    };
-
-    const handleFaceAbsent = () => {
-      consecutiveDetectionsRef.current = 0;
-
-      if (facePresentRef.current && (Date.now() - lastSeenRef.current) > (SECONDS_TO_CONSIDER_LOST * 1000)) {
-        console.log('[FaceDetection] Rosto perdido - desativando conversa');
-        facePresentRef.current = false;
-        onFaceLost();
-      }
-    };
-
-    if (isActive) {
-      initialize();
-    }
-
-    return () => {
-      if (detectionIntervalRef.current) {
-        clearInterval(detectionIntervalRef.current);
-      }
-      if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-      }
-      if (detectorRef.current) {
-        detectorRef.current.close();
-      }
-    };
-  }, [isActive, onFaceDetected, onFaceLost]);
-
-  return (
-    <video 
-      ref={videoRef}
-      className="hidden"
-      autoPlay
-      playsInline
-      muted
-    />
-  );
-};
-
 // Visualizador de áudio
 const AudioVisualizer = ({ isActive, isListening }) => {
   const canvasRef = useRef(null);
@@ -544,7 +425,7 @@ const FaceDetectionStatus = ({ hasVisitor, isConnected }) => {
   if (process.env.NODE_ENV !== 'development') return null;
   
   return (
-    <div className="fixed top-4 left-4 bg-black/80 text-white rounded-lg p-3 text-xs font-mono">
+    <div className="fixed top-4 right-4 bg-black/80 text-white rounded-lg p-3 text-xs font-mono z-50">
       <div className="flex items-center gap-2">
         <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
         <span>Detecção: {isConnected ? 'Ativa' : 'Inativa'}</span>
@@ -556,6 +437,7 @@ const FaceDetectionStatus = ({ hasVisitor, isConnected }) => {
     </div>
   );
 };
+
 const NoiseIndicator = ({ audioLevel, isSpeechDetected }) => {
   const getNoiseLevel = () => {
     if (audioLevel < 10) return { text: 'Silencioso', color: 'text-green-500' };
@@ -768,6 +650,70 @@ export default function HannaConsole() {
     }
   }, []);
 
+  const searchContextInPinecone = useCallback(async (query) => {
+    try {
+      console.log('[Hanna] Buscando contexto no Pinecone para:', query);
+      
+      // Pausa a resposta da AI temporariamente
+      sendEvent({
+        type: 'response.cancel'
+      });
+      
+      const response = await fetch('/api/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query })
+      });
+
+      if (!response.ok) {
+        console.error('[Hanna] Erro ao buscar no Pinecone');
+        return;
+      }
+
+      const data = await response.json();
+      
+      if (data.context) {
+        console.log('[Hanna] Contexto encontrado, atualizando instruções');
+        
+        // Atualiza as instruções da sessão com o contexto
+        await sendEvent({
+          type: 'session.update',
+          session: {
+            instructions: HANNA_INSTRUCTIONS + `
+
+CONTEXTO RELEVANTE PARA RESPONDER:
+${data.context}
+
+Use APENAS essas informações para responder à pergunta do usuário: "${query}"`
+          }
+        });
+        
+        // Pequeno delay para garantir que a sessão foi atualizada
+        setTimeout(() => {
+          // Agora sim, cria a resposta com o contexto atualizado
+          sendEvent({
+            type: 'response.create'
+          });
+        }, 100);
+        
+      } else {
+        console.log('[Hanna] Nenhum contexto relevante encontrado');
+        // Cria resposta mesmo sem contexto
+        sendEvent({
+          type: 'response.create'
+        });
+      }
+    } catch (error) {
+      console.error('[Hanna] Erro ao buscar contexto:', error);
+      // Em caso de erro, cria resposta mesmo assim
+      sendEvent({
+        type: 'response.create'
+      });
+    }
+  }, [sendEvent]);
+
   const sendTextMessage = useCallback((text) => {
     sendEvent({
       type: 'conversation.item.create',
@@ -802,9 +748,11 @@ export default function HannaConsole() {
         break;
 
       case 'conversation.item.created':
+        console.log('[Hanna] Item criado:', event.item.type, event.item.role);
         if (event.item.type === 'message') {
           // Só adiciona mensagem se tiver conteúdo significativo
           const text = event.item.content?.[0]?.text || event.item.content?.[0]?.transcript || '';
+          console.log('[Hanna] Texto do item:', text);
           
           // Filtra mensagens muito curtas ou fragmentadas
           if (text.length > 3 && !text.match(/^(\.|,|!|\?|hmm|uh|eh|ah|oh)$/i)) {
@@ -820,6 +768,12 @@ export default function HannaConsole() {
               }
               return prev;
             });
+            
+            // Se for mensagem do usuário, busca contexto imediatamente
+            if (event.item.role === 'user' && text) {
+              console.log('[Hanna] Mensagem do usuário detectada, buscando contexto...');
+              searchContextInPinecone(text);
+            }
           }
         }
         break;
@@ -836,6 +790,8 @@ export default function HannaConsole() {
               ? { ...m, text: event.transcript }
               : m
           ));
+          
+          // Importante: NÃO busca contexto aqui pois já foi buscado no item.created
         }
         break;
 
@@ -869,6 +825,7 @@ export default function HannaConsole() {
         break;
 
       case 'input_audio_buffer.speech_started':
+        console.log('[Hanna] Detectou início de fala');
         // Só marca como listening se realmente detectar fala
         if (isSpeechDetected) {
           setIsListening(true);
@@ -880,10 +837,12 @@ export default function HannaConsole() {
         break;
 
       case 'input_audio_buffer.speech_stopped':
+        console.log('[Hanna] Detectou fim de fala');
         setIsListening(false);
         break;
 
       case 'input_audio_buffer.committed':
+        console.log('[Hanna] Áudio commitado para processamento');
         break;
 
       case 'response.audio.delta':
@@ -974,6 +933,10 @@ export default function HannaConsole() {
         } 
       });
       setAudioStream(stream);
+      
+      // Testa se o áudio está funcionando
+      console.log('[Hanna] Stream de áudio obtido:', stream.active);
+      console.log('[Hanna] Tracks de áudio:', stream.getAudioTracks().length);
 
       const audioTrack = stream.getAudioTracks()[0];
       pc.addTrack(audioTrack, stream);
@@ -1008,11 +971,11 @@ export default function HannaConsole() {
             },
             turn_detection: {
               type: 'server_vad',
-              threshold: 0.7,              // AUMENTADO de 0.4 para 0.7 (mais rigoroso)
-              prefix_padding_ms: 300,      // REDUZIDO de 500 para 300
-              silence_duration_ms: 1500    // AUMENTADO de 800 para 1500 (espera mais silêncio)
+              threshold: 0.5,               // Reduzido de 0.7 para 0.5 (mais sensível)
+              prefix_padding_ms: 500,       // Aumentado de 300 para 500
+              silence_duration_ms: 1000     // Reduzido de 1500 para 1000
             },
-            voice: 'nova',  // Voz válida e profissional
+            voice: 'alloy',  // Voz válida e profissional
             temperature: 0.6,              // Mínimo permitido pela API (mais focado e consistente)
             max_response_output_tokens: 200,  // Reduzido para respostas mais concisas
             tools: [
@@ -1227,6 +1190,7 @@ export default function HannaConsole() {
         onFaceDetected={handleFaceDetected}
         onFaceLost={handleFaceLost}
         isActive={isConnected}
+        debugMode={process.env.NODE_ENV === 'development'} // Ativa debug mode apenas em desenvolvimento
       />
       
       {/* Indicador de debug (apenas em desenvolvimento) */}
