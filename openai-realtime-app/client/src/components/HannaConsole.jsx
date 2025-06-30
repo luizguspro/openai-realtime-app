@@ -592,6 +592,9 @@ export default function HannaConsole() {
   const inactivityTimerRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
+  const processingQueryRef = useRef(false);
+  const pendingUserMessagesRef = useRef([]);
+  const firstGreetingDoneRef = useRef(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -646,18 +649,17 @@ export default function HannaConsole() {
 
   const sendEvent = useCallback((event) => {
     if (dcRef.current && dcRef.current.readyState === 'open') {
+      console.log('[Hanna] Enviando evento:', event.type);
       dcRef.current.send(JSON.stringify(event));
+    } else {
+      console.warn('[Hanna] Data channel não está aberto:', event.type);
     }
   }, []);
 
-  const searchContextInPinecone = useCallback(async (query) => {
+  const searchContextInPinecone = useCallback(async (query, itemId) => {
     try {
-      console.log('[Hanna] Buscando contexto no Pinecone para:', query);
-      
-      // Pausa a resposta da AI temporariamente
-      sendEvent({
-        type: 'response.cancel'
-      });
+      console.log('[Hanna] Iniciando busca no Pinecone para:', query);
+      processingQueryRef.current = true;
       
       const response = await fetch('/api/search', {
         method: 'POST',
@@ -668,67 +670,78 @@ export default function HannaConsole() {
       });
 
       if (!response.ok) {
-        console.error('[Hanna] Erro ao buscar no Pinecone');
-        return;
+        console.error('[Hanna] Erro ao buscar no Pinecone:', response.status);
+        return null;
       }
 
       const data = await response.json();
+      console.log('[Hanna] Resposta do Pinecone:', data);
       
       if (data.context) {
-        console.log('[Hanna] Contexto encontrado, atualizando instruções');
-        
-        // Atualiza as instruções da sessão com o contexto
-        await sendEvent({
-          type: 'session.update',
-          session: {
-            instructions: HANNA_INSTRUCTIONS + `
-
-CONTEXTO RELEVANTE PARA RESPONDER:
-${data.context}
-
-Use APENAS essas informações para responder à pergunta do usuário: "${query}"`
-          }
-        });
-        
-        // Pequeno delay para garantir que a sessão foi atualizada
-        setTimeout(() => {
-          // Agora sim, cria a resposta com o contexto atualizado
-          sendEvent({
-            type: 'response.create'
-          });
-        }, 100);
-        
+        console.log('[Hanna] Contexto encontrado:', data.context);
+        return data.context;
       } else {
         console.log('[Hanna] Nenhum contexto relevante encontrado');
-        // Cria resposta mesmo sem contexto
-        sendEvent({
-          type: 'response.create'
-        });
+        return null;
       }
     } catch (error) {
       console.error('[Hanna] Erro ao buscar contexto:', error);
-      // Em caso de erro, cria resposta mesmo assim
-      sendEvent({
-        type: 'response.create'
-      });
+      return null;
+    } finally {
+      processingQueryRef.current = false;
     }
-  }, [sendEvent]);
+  }, []);
 
-  const sendTextMessage = useCallback((text) => {
-    sendEvent({
-      type: 'conversation.item.create',
-      item: {
-        type: 'message',
-        role: 'user',
-        content: [{
-          type: 'input_text',
-          text: text
-        }]
-      }
-    });
-  }, [sendEvent]);
+  const processUserMessage = useCallback(async (text, itemId) => {
+    // Só processa se o cumprimento inicial já foi feito
+    if (!firstGreetingDoneRef.current) {
+      console.log('[Hanna] Aguardando cumprimento inicial ser concluído');
+      return;
+    }
+    
+    console.log('[Hanna] Processando mensagem do usuário:', text);
+    processingQueryRef.current = true;
+    
+    try {
+      // Busca contexto no Pinecone
+      const context = await searchContextInPinecone(text, itemId);
+      
+      // Atualiza as instruções da sessão com o contexto
+      const updatedInstructions = context 
+        ? HANNA_INSTRUCTIONS + `\n\nCONTEXTO RELEVANTE PARA RESPONDER:\n${context}\n\nUse APENAS essas informações para responder à pergunta do usuário: "${text}"`
+        : HANNA_INSTRUCTIONS + `\n\nNão foram encontradas informações específicas sobre: "${text}". Responda educadamente que não tem essa informação.`;
+      
+      console.log('[Hanna] Atualizando instruções da sessão com contexto');
+      sendEvent({
+        type: 'session.update',
+        session: {
+          instructions: updatedInstructions,
+          modalities: ['text', 'audio'],
+          temperature: 0.6
+        }
+      });
+      
+      // Aguarda um pouco para garantir que a sessão foi atualizada
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Agora cria a resposta
+      console.log('[Hanna] Criando resposta com contexto atualizado');
+      sendEvent({
+        type: 'response.create',
+        response: {
+          modalities: ['text', 'audio']
+        }
+      });
+    } catch (error) {
+      console.error('[Hanna] Erro ao processar mensagem:', error);
+    } finally {
+      processingQueryRef.current = false;
+    }
+  }, [searchContextInPinecone, sendEvent]);
 
   const handleRealtimeEvent = useCallback((event) => {
+    console.log('[Hanna] Evento recebido:', event.type);
+    
     switch (event.type) {
       case 'error':
         console.error('Server error:', event.error);
@@ -748,13 +761,12 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
         break;
 
       case 'conversation.item.created':
-        console.log('[Hanna] Item criado:', event.item.type, event.item.role);
+        console.log('[Hanna] Item criado:', event.item);
         if (event.item.type === 'message') {
-          // Só adiciona mensagem se tiver conteúdo significativo
           const text = event.item.content?.[0]?.text || event.item.content?.[0]?.transcript || '';
           console.log('[Hanna] Texto do item:', text);
           
-          // Filtra mensagens muito curtas ou fragmentadas
+          // Adiciona a mensagem à interface
           if (text.length > 3 && !text.match(/^(\.|,|!|\?|hmm|uh|eh|ah|oh)$/i)) {
             setMessages(prev => {
               const existing = prev.find(m => m.id === event.item.id);
@@ -768,12 +780,20 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
               }
               return prev;
             });
-            
-            // Se for mensagem do usuário, busca contexto imediatamente
-            if (event.item.role === 'user' && text) {
-              console.log('[Hanna] Mensagem do usuário detectada, buscando contexto...');
-              searchContextInPinecone(text);
-            }
+          } else if (event.item.role === 'user' || event.item.role === 'assistant') {
+            // Adiciona mensagem vazia para ser preenchida depois
+            setMessages(prev => {
+              const existing = prev.find(m => m.id === event.item.id);
+              if (!existing) {
+                return [...prev, {
+                  id: event.item.id,
+                  role: event.item.role,
+                  text: '',
+                  timestamp: Date.now(),
+                }];
+              }
+              return prev;
+            });
           }
         }
         break;
@@ -783,7 +803,7 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
         break;
 
       case 'conversation.item.input_audio_transcription.completed':
-        // Só atualiza se a transcrição for significativa
+        console.log('[Hanna] Transcrição completa:', event.transcript);
         if (event.transcript && event.transcript.length > 3) {
           setMessages(prev => prev.map(m => 
             m.id === event.item_id 
@@ -791,7 +811,11 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
               : m
           ));
           
-          // Importante: NÃO busca contexto aqui pois já foi buscado no item.created
+          // IMPORTANTE: Processa a mensagem quando a transcrição estiver completa
+          if (!processingQueryRef.current) {
+            console.log('[Hanna] Processando transcrição completa imediatamente');
+            processUserMessage(event.transcript, event.item_id);
+          }
         }
         break;
 
@@ -845,6 +869,18 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
         console.log('[Hanna] Áudio commitado para processamento');
         break;
 
+      case 'response.created':
+        console.log('[Hanna] Resposta criada');
+        break;
+
+      case 'response.output_item.added':
+        console.log('[Hanna] Item de saída adicionado:', event);
+        break;
+
+      case 'response.content_part.added':
+        console.log('[Hanna] Parte do conteúdo adicionada:', event);
+        break;
+
       case 'response.audio.delta':
         setIsSpeaking(true);
         break;
@@ -860,6 +896,10 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
             setVisitorInfo({ name: '', email: '', phone: '' });
           }
         }, 45000); // 45 segundos de inatividade
+        break;
+
+      case 'response.done':
+        console.log('[Hanna] Resposta concluída');
         break;
       
       case 'response.function_call_arguments.done':
@@ -886,9 +926,10 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
         break;
 
       default:
+        console.log('[Hanna] Evento não tratado:', event.type);
         break;
     }
-  }, [isSpeechDetected, sendEvent]);
+  }, [isSpeechDetected, sendEvent, processUserMessage]);
 
   const initializeWebRTC = useCallback(async () => {
     try {
@@ -952,17 +993,7 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
         const sessionConfig = {
           type: 'session.update',
           session: {
-            instructions: HANNA_INSTRUCTIONS + `
-
-<noise_environment_protocol>
-  Para ambientes barulhentos:
-  - APENAS responda quando tiver CERTEZA de que alguém está falando DIRETAMENTE com você
-  - Ignore ruídos de fundo, conversas distantes e sons ambiente
-  - Espere por frases completas e claras antes de responder
-  - Se não entender claramente, responda: "Desculpe, não entendi. Pode repetir?"
-  - NÃO responda a fragmentos de conversa ou palavras soltas
-  - Aguarde pelo menos 2 segundos de silêncio antes de responder
-</noise_environment_protocol>`,
+            instructions: HANNA_INSTRUCTIONS,
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
             input_audio_transcription: { 
@@ -971,13 +1002,14 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
             },
             turn_detection: {
               type: 'server_vad',
-              threshold: 0.5,               // Reduzido de 0.7 para 0.5 (mais sensível)
-              prefix_padding_ms: 500,       // Aumentado de 300 para 500
-              silence_duration_ms: 1000     // Reduzido de 1500 para 1000
+              threshold: 0.5,               
+              prefix_padding_ms: 500,       
+              silence_duration_ms: 1200,    // Aumentado para dar mais tempo
+              create_response: false        // IMPORTANTE: Desativa criação automática de resposta
             },
-            voice: 'alloy',  // Voz válida e profissional
-            temperature: 0.6,              // Mínimo permitido pela API (mais focado e consistente)
-            max_response_output_tokens: 200,  // Reduzido para respostas mais concisas
+            voice: 'alloy',  
+            temperature: 0.6,              
+            max_response_output_tokens: 200,  
             tools: [
               {
                 type: 'function',
@@ -1087,6 +1119,7 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
     setIsListening(false);
     setIsSpeaking(false);
     setMessages([]);
+    pendingUserMessagesRef.current = [];
   }, [audioStream]);
 
   const toggleMute = useCallback(() => {
@@ -1113,6 +1146,7 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
     setHasVisitor(true);
     setShowConversation(true);
     sessionActiveRef.current = true;
+    firstGreetingDoneRef.current = false; // Reset para novo visitante
 
     // Clear any existing inactivity timer
     if (inactivityTimerRef.current) {
@@ -1122,6 +1156,10 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
     // Envia comando para o assistente cumprimentar
     if (isConnected) {
       sendEvent({ type: 'response.create' });
+      // Marca que o cumprimento inicial foi enviado
+      setTimeout(() => {
+        firstGreetingDoneRef.current = true;
+      }, 2000);
     }
   }, [isConnected, sendEvent]);
 
@@ -1136,6 +1174,8 @@ Use APENAS essas informações para responder à pergunta do usuário: "${query}
         setHasVisitor(false);
         setMessages([]);
         setVisitorInfo({ name: '', email: '', phone: '' });
+        firstGreetingDoneRef.current = false; // Reset quando visitante sai
+        pendingUserMessagesRef.current = []; // Limpa fila
       }
     }, 20000); // 20 segundos após perder o rosto
   }, []);
